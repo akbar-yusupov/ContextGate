@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src/contextgate
+      - run: uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
+        env:
+          CONTEXTGATE_DATABASE_URL: sqlite:///./.contextgate/migration-test.db
+      - run: uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini check
+        env:
+          CONTEXTGATE_DATABASE_URL: sqlite:///./.contextgate/migration-test.db
+      # - run: uv run pytest --cov=contextgate --cov-report=term-missing
+      #   env:
+      #     CONTEXTGATE_EMBEDDING_BACKEND: deterministic
+      #     CONTEXTGATE_DENSE_DIMENSION: "64"
+      #     CONTEXTGATE_LATE_DIMENSION: "32"
+      #     CONTEXTGATE_QDRANT_LOCAL_PATH: ./.contextgate/test-qdrant
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: docker build -t contextgate:test .

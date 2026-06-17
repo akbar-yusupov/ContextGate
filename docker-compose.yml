@@ -1,0 +1,206 @@
+x-contextgate-image: &contextgate-image
+  image: ${CONTEXTGATE_IMAGE:-contextgate:local}
+  build:
+    context: ${CONTEXTGATE_BUILD_CONTEXT:-.}
+
+x-contextgate-env: &contextgate-env
+  CONTEXTGATE_DATABASE_BACKEND: ${CONTEXTGATE_DATABASE_BACKEND:-postgres}
+  CONTEXTGATE_DATABASE_HOST: ${CONTEXTGATE_POSTGRES_SERVICE:-postgres}
+  CONTEXTGATE_DATABASE_PORT: ${CONTEXTGATE_POSTGRES_PORT:-5432}
+  CONTEXTGATE_DATABASE_NAME: ${CONTEXTGATE_DATABASE_NAME:?Set CONTEXTGATE_DATABASE_NAME in .env}
+  CONTEXTGATE_DATABASE_USER: ${CONTEXTGATE_DATABASE_USER:?Set CONTEXTGATE_DATABASE_USER in .env}
+  CONTEXTGATE_DATABASE_PASSWORD: ${CONTEXTGATE_DATABASE_PASSWORD:?Set CONTEXTGATE_DATABASE_PASSWORD in .env}
+  CONTEXTGATE_QDRANT_HOST: ${CONTEXTGATE_QDRANT_SERVICE:-qdrant}
+  CONTEXTGATE_QDRANT_PORT: ${CONTEXTGATE_QDRANT_PORT:-6333}
+  CONTEXTGATE_REDIS_HOST: ${CONTEXTGATE_REDIS_SERVICE:-redis}
+  CONTEXTGATE_REDIS_PORT: ${CONTEXTGATE_REDIS_PORT:-6379}
+  CONTEXTGATE_REDIS_PASSWORD: ${CONTEXTGATE_REDIS_PASSWORD:?Set CONTEXTGATE_REDIS_PASSWORD in .env}
+  CONTEXTGATE_MLFLOW_TRACKING_HOST: ${CONTEXTGATE_MLFLOW_SERVICE:-mlflow}
+  CONTEXTGATE_MLFLOW_TRACKING_PORT: ${CONTEXTGATE_MLFLOW_PORT:-5000}
+  CONTEXTGATE_AUTH_ENABLED: ${CONTEXTGATE_AUTH_ENABLED:-true}
+  CONTEXTGATE_API_KEY: ${CONTEXTGATE_API_KEY:?Set CONTEXTGATE_API_KEY in .env}
+  CONTEXTGATE_RATE_LIMIT_PER_MINUTE: ${CONTEXTGATE_RATE_LIMIT_PER_MINUTE:-120}
+  CONTEXTGATE_ENVIRONMENT: ${CONTEXTGATE_ENVIRONMENT:-development}
+  CONTEXTGATE_EMBEDDING_BACKEND: ${CONTEXTGATE_EMBEDDING_BACKEND:-fastembed}
+  CONTEXTGATE_DENSE_DIMENSION: ${CONTEXTGATE_DENSE_DIMENSION:-384}
+  CONTEXTGATE_LATE_DIMENSION: ${CONTEXTGATE_LATE_DIMENSION:-96}
+  CONTEXTGATE_LATE_INTERACTION_LANGUAGES: ${CONTEXTGATE_LATE_INTERACTION_LANGUAGES:-en}
+  CONTEXTGATE_QDRANT_STRICT_MODE: ${CONTEXTGATE_QDRANT_STRICT_MODE:-true}
+  CONTEXTGATE_INDEXED_METADATA_FIELDS: ${CONTEXTGATE_INDEXED_METADATA_FIELDS:-{}}
+  CONTEXTGATE_POLICIES_PATH: ${CONTEXTGATE_POLICIES_PATH:-configs/policies.yaml}
+  CONTEXTGATE_LLM_MODEL: ${CONTEXTGATE_LLM_MODEL:-}
+  CONTEXTGATE_LLM_API_BASE: ${CONTEXTGATE_LLM_API_BASE:-}
+  CONTEXTGATE_LLM_API_KEY: ${CONTEXTGATE_LLM_API_KEY:-}
+  HF_HOME: ${CONTEXTGATE_HF_HOME:-/models}
+
+services:
+  postgres:
+    image: ${CONTEXTGATE_POSTGRES_IMAGE:-postgres:18-alpine}
+    command:
+      - postgres
+      - -c
+      - port=${CONTEXTGATE_POSTGRES_PORT:-5432}
+    environment:
+      POSTGRES_DB: ${CONTEXTGATE_DATABASE_NAME:?Set CONTEXTGATE_DATABASE_NAME in .env}
+      POSTGRES_USER: ${CONTEXTGATE_DATABASE_USER:?Set CONTEXTGATE_DATABASE_USER in .env}
+      POSTGRES_PASSWORD: ${CONTEXTGATE_DATABASE_PASSWORD:?Set CONTEXTGATE_DATABASE_PASSWORD in .env}
+      CONTEXTGATE_MLFLOW_DATABASE_NAME: ${CONTEXTGATE_MLFLOW_DATABASE_NAME:?Set CONTEXTGATE_MLFLOW_DATABASE_NAME in .env}
+      PGPORT: ${CONTEXTGATE_POSTGRES_PORT:-5432}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -p \"$${PGPORT}\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${CONTEXTGATE_POSTGRES_PORT:-5432}:${CONTEXTGATE_POSTGRES_PORT:-5432}"
+    volumes:
+      - postgres-18-data:/var/lib/postgresql
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+
+  redis:
+    image: ${CONTEXTGATE_REDIS_IMAGE:-redis:8-alpine}
+    command:
+      - sh
+      - -c
+      - redis-server --appendonly yes --port "$$REDIS_PORT" --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${CONTEXTGATE_REDIS_PASSWORD:?Set CONTEXTGATE_REDIS_PASSWORD in .env}
+      REDIS_PORT: ${CONTEXTGATE_REDIS_PORT:-6379}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p \"$${REDIS_PORT}\" -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${CONTEXTGATE_REDIS_PORT:-6379}:${CONTEXTGATE_REDIS_PORT:-6379}"
+    volumes:
+      - redis-data:/data
+
+  qdrant:
+    image: ${CONTEXTGATE_QDRANT_IMAGE:-qdrant/qdrant:v1.18.2}
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: ${CONTEXTGATE_QDRANT_PORT:-6333}
+    ports:
+      - "${CONTEXTGATE_QDRANT_PORT:-6333}:${CONTEXTGATE_QDRANT_PORT:-6333}"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  mlflow:
+    <<: *contextgate-image
+    command:
+      - python
+      - -m
+      - contextgate.apps.mlflow.main
+    environment:
+      <<: *contextgate-env
+      CONTEXTGATE_MLFLOW_DATABASE_NAME: ${CONTEXTGATE_MLFLOW_DATABASE_NAME:?Set CONTEXTGATE_MLFLOW_DATABASE_NAME in .env}
+      CONTEXTGATE_MLFLOW_REGISTRY_STORE_URI: ${CONTEXTGATE_MLFLOW_REGISTRY_STORE_URI:-}
+      CONTEXTGATE_MLFLOW_ARTIFACT_ROOT: ${CONTEXTGATE_MLFLOW_ARTIFACT_ROOT:-/mlartifacts}
+      CONTEXTGATE_MLFLOW_SERVER_HOST: ${CONTEXTGATE_MLFLOW_BIND_HOST:-0.0.0.0}
+      CONTEXTGATE_MLFLOW_SERVER_PORT: ${CONTEXTGATE_MLFLOW_PORT:-5000}
+      CONTEXTGATE_MLFLOW_WORKERS: ${CONTEXTGATE_MLFLOW_WORKERS:-1}
+      CONTEXTGATE_MLFLOW_ALLOWED_HOSTS: ${CONTEXTGATE_MLFLOW_ALLOWED_HOSTS:-localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,mlflow,mlflow:5000,host.docker.internal,host.docker.internal:5000}
+      CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS: ${CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS:-http://localhost:5000,http://127.0.0.1:5000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8001,http://127.0.0.1:8001}
+      CONTEXTGATE_MLFLOW_SUPPRESS_UPSTREAM_WARNINGS: ${CONTEXTGATE_MLFLOW_SUPPRESS_UPSTREAM_WARNINGS:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${CONTEXTGATE_MLFLOW_PORT:-5000}:${CONTEXTGATE_MLFLOW_PORT:-5000}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${CONTEXTGATE_MLFLOW_PORT:-5000}/health')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mlflow-artifacts:/mlartifacts
+
+  api:
+    <<: *contextgate-image
+    command:
+      - sh
+      - -c
+      - alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head && uvicorn contextgate.apps.api.main:app --host ${CONTEXTGATE_API_BIND_HOST:-0.0.0.0} --port ${CONTEXTGATE_API_PORT:-8000}
+    environment: *contextgate-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      mlflow:
+        condition: service_healthy
+    ports:
+      - "${CONTEXTGATE_API_PORT:-8000}:${CONTEXTGATE_API_PORT:-8000}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${CONTEXTGATE_API_PORT:-8000}/health')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - model-cache:/models
+
+  worker:
+    <<: *contextgate-image
+    command:
+      - celery
+      - -A
+      - contextgate.apps.worker.main.celery_app
+      - worker
+      - --loglevel=${CONTEXTGATE_WORKER_LOG_LEVEL:-INFO}
+      - --concurrency=${CONTEXTGATE_WORKER_CONCURRENCY:-2}
+    environment: *contextgate-env
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - model-cache:/models
+
+  chainlit:
+    <<: *contextgate-image
+    command:
+      - chainlit
+      - run
+      - src/contextgate/apps/chainlit/main.py
+      - --host
+      - ${CONTEXTGATE_CHAINLIT_BIND_HOST:-0.0.0.0}
+      - --port
+      - "${CONTEXTGATE_CHAINLIT_PORT:-8001}"
+    environment:
+      CONTEXTGATE_UI_API_URL: http://${CONTEXTGATE_API_SERVICE:-api}:${CONTEXTGATE_API_PORT:-8000}
+      CONTEXTGATE_API_KEY: ${CONTEXTGATE_API_KEY:?Set CONTEXTGATE_API_KEY in .env}
+      CONTEXTGATE_MLFLOW_TRACKING_HOST: ${CONTEXTGATE_MLFLOW_SERVICE:-mlflow}
+      CONTEXTGATE_MLFLOW_TRACKING_PORT: ${CONTEXTGATE_MLFLOW_PORT:-5000}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${CONTEXTGATE_CHAINLIT_PORT:-8001}:${CONTEXTGATE_CHAINLIT_PORT:-8001}"
+
+volumes:
+  mlflow-artifacts:
+  model-cache:
+  postgres-18-data:
+  qdrant-data:
+  redis-data:

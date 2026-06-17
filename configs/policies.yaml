@@ -1,0 +1,26 @@
+policies:
+  fast:
+    dense_limit: 20
+    sparse_limit: 0
+    prefetch_limit: 20
+    output_limit: 10
+    use_late_interaction: false
+    use_cross_encoder: false
+    abstention_threshold: 0.20
+  balanced:
+    dense_limit: 100
+    sparse_limit: 100
+    prefetch_limit: 100
+    output_limit: 10
+    use_late_interaction: true
+    use_cross_encoder: false
+    abstention_threshold: 0.24
+  accurate:
+    dense_limit: 300
+    sparse_limit: 300
+    prefetch_limit: 300
+    output_limit: 10
+    use_late_interaction: true
+    use_cross_encoder: true
+    abstention_threshold: 0.28
+
