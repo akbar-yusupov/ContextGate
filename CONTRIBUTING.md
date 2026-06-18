@@ -9,7 +9,6 @@ uv run ruff format --check .
 uv run mypy src/contextgate
 uv run deptry .
 uv audit --locked
-uv run pytest --cov=contextgate --cov-report=term-missing
 ```
 
 `deptry` rejects missing, transitive-only and unused direct dependencies. `uv audit` checks all
@@ -17,6 +16,23 @@ locked runtime, optional and development dependencies against OSV. `python-multi
 unused-import exception because FastAPI loads it as a runtime plugin for file uploads.
 
 Use Python 3.12. Do not commit downloaded models, local databases, reports, or customer data.
+
+## Running tests locally
+
+Run the same test suite and coverage check as GitHub Actions before pushing:
+
+```bash
+uv sync --locked --extra dev
+uv run pytest --cov=contextgate --cov-report=term-missing
+```
+
+The test configuration automatically uses deterministic embeddings, SQLite and local Qdrant
+storage. PostgreSQL, Redis, Qdrant and MLflow services do not need to be running. To run a focused
+test while developing, pass its path to pytest:
+
+```bash
+uv run pytest tests/test_router.py -q
+```
 
 ## Pull requests
 

@@ -314,13 +314,22 @@ uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
 
 ## Verification
 
+Run the GitHub Actions test suite locally before pushing. Tests configure deterministic embeddings,
+SQLite and local Qdrant storage automatically, so no external services are required:
+
+```bash
+uv sync --locked --extra dev
+uv run pytest --cov=contextgate --cov-report=term-missing
+```
+
+The remaining CI checks are:
+
 ```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src/contextgate
 uv run deptry .
 uv audit --locked
-uv run pytest --cov=contextgate --cov-report=term-missing
 uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
 uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini check
 docker compose config --quiet
