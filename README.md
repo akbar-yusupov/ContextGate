@@ -318,7 +318,9 @@ uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src/contextgate
-uv run python -m pytest
+uv run deptry .
+uv audit --locked
+uv run pytest --cov=contextgate --cov-report=term-missing
 uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
 uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini check
 docker compose config --quiet

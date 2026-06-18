@@ -4,10 +4,17 @@
 
 ```bash
 uv sync --extra dev --extra ui --extra llm
-uv run pytest
 uv run ruff check .
-uv run mypy src/ContextGate
+uv run ruff format --check .
+uv run mypy src/contextgate
+uv run deptry .
+uv audit --locked
+uv run pytest --cov=contextgate --cov-report=term-missing
 ```
+
+`deptry` rejects missing, transitive-only and unused direct dependencies. `uv audit` checks all
+locked runtime, optional and development dependencies against OSV. `python-multipart` is the only
+unused-import exception because FastAPI loads it as a runtime plugin for file uploads.
 
 Use Python 3.12. Do not commit downloaded models, local databases, reports, or customer data.
 

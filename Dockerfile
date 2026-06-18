@@ -6,10 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv==0.9.26
+RUN pip install --no-cache-dir uv==0.11.17
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
-RUN uv sync --frozen --no-dev --extra ui --extra llm
+RUN uv sync --locked --no-dev --extra ui --extra llm
 
 COPY configs ./configs
 COPY demo ./demo
