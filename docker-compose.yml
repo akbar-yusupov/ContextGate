@@ -2,6 +2,12 @@ x-contextgate-image: &contextgate-image
   image: ${CONTEXTGATE_IMAGE:-contextgate:local}
   build:
     context: ${CONTEXTGATE_BUILD_CONTEXT:-.}
+  init: true
+  stop_grace_period: 30s
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
 
 x-contextgate-env: &contextgate-env
   CONTEXTGATE_DATABASE_BACKEND: ${CONTEXTGATE_DATABASE_BACKEND:-postgres}
@@ -10,6 +16,9 @@ x-contextgate-env: &contextgate-env
   CONTEXTGATE_DATABASE_NAME: ${CONTEXTGATE_DATABASE_NAME:?Set CONTEXTGATE_DATABASE_NAME in .env}
   CONTEXTGATE_DATABASE_USER: ${CONTEXTGATE_DATABASE_USER:?Set CONTEXTGATE_DATABASE_USER in .env}
   CONTEXTGATE_DATABASE_PASSWORD: ${CONTEXTGATE_DATABASE_PASSWORD:?Set CONTEXTGATE_DATABASE_PASSWORD in .env}
+  CONTEXTGATE_DATABASE_POOL_SIZE: ${CONTEXTGATE_DATABASE_POOL_SIZE:-10}
+  CONTEXTGATE_DATABASE_MAX_OVERFLOW: ${CONTEXTGATE_DATABASE_MAX_OVERFLOW:-5}
+  CONTEXTGATE_DATABASE_POOL_TIMEOUT_SECONDS: ${CONTEXTGATE_DATABASE_POOL_TIMEOUT_SECONDS:-10}
   CONTEXTGATE_QDRANT_HOST: ${CONTEXTGATE_QDRANT_SERVICE:-qdrant}
   CONTEXTGATE_QDRANT_PORT: ${CONTEXTGATE_QDRANT_PORT:-6333}
   CONTEXTGATE_REDIS_HOST: ${CONTEXTGATE_REDIS_SERVICE:-redis}
@@ -17,9 +26,14 @@ x-contextgate-env: &contextgate-env
   CONTEXTGATE_REDIS_PASSWORD: ${CONTEXTGATE_REDIS_PASSWORD:?Set CONTEXTGATE_REDIS_PASSWORD in .env}
   CONTEXTGATE_MLFLOW_TRACKING_HOST: ${CONTEXTGATE_MLFLOW_SERVICE:-mlflow}
   CONTEXTGATE_MLFLOW_TRACKING_PORT: ${CONTEXTGATE_MLFLOW_PORT:-5000}
+  CONTEXTGATE_MLFLOW_PUBLIC_URL: ${CONTEXTGATE_MLFLOW_PUBLIC_URL:-http://localhost:${CONTEXTGATE_MLFLOW_PORT:-5000}}
+  CONTEXTGATE_API_PUBLIC_URL: ${CONTEXTGATE_API_PUBLIC_URL:-http://localhost:${CONTEXTGATE_API_PORT:-8000}}
+  MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT: "true"
   CONTEXTGATE_AUTH_ENABLED: ${CONTEXTGATE_AUTH_ENABLED:-true}
+  CONTEXTGATE_RATE_LIMIT_ENABLED: ${CONTEXTGATE_RATE_LIMIT_ENABLED:-true}
   CONTEXTGATE_API_KEY: ${CONTEXTGATE_API_KEY:?Set CONTEXTGATE_API_KEY in .env}
   CONTEXTGATE_RATE_LIMIT_PER_MINUTE: ${CONTEXTGATE_RATE_LIMIT_PER_MINUTE:-120}
+  CONTEXTGATE_RATE_LIMIT_FAIL_OPEN: ${CONTEXTGATE_RATE_LIMIT_FAIL_OPEN:-false}
   CONTEXTGATE_ENVIRONMENT: ${CONTEXTGATE_ENVIRONMENT:-development}
   CONTEXTGATE_EMBEDDING_BACKEND: ${CONTEXTGATE_EMBEDDING_BACKEND:-fastembed}
   CONTEXTGATE_DENSE_DIMENSION: ${CONTEXTGATE_DENSE_DIMENSION:-384}
@@ -31,6 +45,29 @@ x-contextgate-env: &contextgate-env
   CONTEXTGATE_LLM_MODEL: ${CONTEXTGATE_LLM_MODEL:-}
   CONTEXTGATE_LLM_API_BASE: ${CONTEXTGATE_LLM_API_BASE:-}
   CONTEXTGATE_LLM_API_KEY: ${CONTEXTGATE_LLM_API_KEY:-}
+  CONTEXTGATE_LLM_INPUT_COST_PER_1M_TOKENS: ${CONTEXTGATE_LLM_INPUT_COST_PER_1M_TOKENS:-}
+  CONTEXTGATE_LLM_OUTPUT_COST_PER_1M_TOKENS: ${CONTEXTGATE_LLM_OUTPUT_COST_PER_1M_TOKENS:-}
+  CONTEXTGATE_LLM_MAX_OUTPUT_TOKENS: ${CONTEXTGATE_LLM_MAX_OUTPUT_TOKENS:-512}
+  CONTEXTGATE_LLM_TIMEOUT_SECONDS: ${CONTEXTGATE_LLM_TIMEOUT_SECONDS:-60}
+  CONTEXTGATE_LLM_MAX_RETRIES: ${CONTEXTGATE_LLM_MAX_RETRIES:-2}
+  CONTEXTGATE_LLM_CIRCUIT_FAILURE_THRESHOLD: ${CONTEXTGATE_LLM_CIRCUIT_FAILURE_THRESHOLD:-5}
+  CONTEXTGATE_LLM_CIRCUIT_COOLDOWN_SECONDS: ${CONTEXTGATE_LLM_CIRCUIT_COOLDOWN_SECONDS:-30}
+  CONTEXTGATE_MAX_UPLOAD_BYTES: ${CONTEXTGATE_MAX_UPLOAD_BYTES:-20971520}
+  CONTEXTGATE_MAX_PDF_PAGES: ${CONTEXTGATE_MAX_PDF_PAGES:-500}
+  CONTEXTGATE_MAX_EXTRACTED_CHARS: ${CONTEXTGATE_MAX_EXTRACTED_CHARS:-10000000}
+  CONTEXTGATE_WORKER_TASK_SOFT_TIME_LIMIT_SECONDS: ${CONTEXTGATE_WORKER_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
+  CONTEXTGATE_WORKER_TASK_TIME_LIMIT_SECONDS: ${CONTEXTGATE_WORKER_TASK_TIME_LIMIT_SECONDS:-330}
+  CONTEXTGATE_ALLOW_PROVISIONAL_STREAMING: ${CONTEXTGATE_ALLOW_PROVISIONAL_STREAMING:-false}
+  CONTEXTGATE_GRAPH_CHECKPOINTING_ENABLED: ${CONTEXTGATE_GRAPH_CHECKPOINTING_ENABLED:-false}
+  CONTEXTGATE_TRACE_CONTENT_MODE: ${CONTEXTGATE_TRACE_CONTENT_MODE:-full}
+  CONTEXTGATE_TRACE_RETENTION_DAYS: ${CONTEXTGATE_TRACE_RETENTION_DAYS:-30}
+  CONTEXTGATE_ROUTER_MIN_RELEASE_CASES: ${CONTEXTGATE_ROUTER_MIN_RELEASE_CASES:-200}
+  CONTEXTGATE_ROUTER_MIN_UNANSWERABLE_CASES: ${CONTEXTGATE_ROUTER_MIN_UNANSWERABLE_CASES:-50}
+  CONTEXTGATE_ROUTER_MIN_CASES_PER_LANGUAGE: ${CONTEXTGATE_ROUTER_MIN_CASES_PER_LANGUAGE:-30}
+  CONTEXTGATE_ROUTER_REQUIRED_LANGUAGES: ${CONTEXTGATE_ROUTER_REQUIRED_LANGUAGES:-en,ru,uz}
+  CONTEXTGATE_ROUTER_MAX_FALSE_ANSWER_UPPER_95: ${CONTEXTGATE_ROUTER_MAX_FALSE_ANSWER_UPPER_95:-0.02}
+  CONTEXTGATE_ROUTER_MIN_CITATION_LOWER_95: ${CONTEXTGATE_ROUTER_MIN_CITATION_LOWER_95:-0.98}
+  CONTEXTGATE_ROUTER_MIN_CLAIM_SUPPORT_LOWER_95: ${CONTEXTGATE_ROUTER_MIN_CLAIM_SUPPORT_LOWER_95:-0.95}
   HF_HOME: ${CONTEXTGATE_HF_HOME:-/models}
 
 services:
@@ -56,10 +93,11 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "${CONTEXTGATE_POSTGRES_PORT:-5432}:${CONTEXTGATE_POSTGRES_PORT:-5432}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_POSTGRES_PORT:-5432}:${CONTEXTGATE_POSTGRES_PORT:-5432}"
     volumes:
       - postgres-18-data:/var/lib/postgresql
       - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    restart: unless-stopped
 
   redis:
     image: ${CONTEXTGATE_REDIS_IMAGE:-redis:8-alpine}
@@ -80,21 +118,24 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "${CONTEXTGATE_REDIS_PORT:-6379}:${CONTEXTGATE_REDIS_PORT:-6379}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_REDIS_PORT:-6379}:${CONTEXTGATE_REDIS_PORT:-6379}"
     volumes:
       - redis-data:/data
+    restart: unless-stopped
 
   qdrant:
     image: ${CONTEXTGATE_QDRANT_IMAGE:-qdrant/qdrant:v1.18.2}
     environment:
       QDRANT__SERVICE__HTTP_PORT: ${CONTEXTGATE_QDRANT_PORT:-6333}
     ports:
-      - "${CONTEXTGATE_QDRANT_PORT:-6333}:${CONTEXTGATE_QDRANT_PORT:-6333}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_QDRANT_PORT:-6333}:${CONTEXTGATE_QDRANT_PORT:-6333}"
     volumes:
       - qdrant-data:/qdrant/storage
+    restart: unless-stopped
 
   mlflow:
     <<: *contextgate-image
+    profiles: ["evaluation"]
     command:
       - python
       - -m
@@ -107,32 +148,34 @@ services:
       CONTEXTGATE_MLFLOW_SERVER_HOST: ${CONTEXTGATE_MLFLOW_BIND_HOST:-0.0.0.0}
       CONTEXTGATE_MLFLOW_SERVER_PORT: ${CONTEXTGATE_MLFLOW_PORT:-5000}
       CONTEXTGATE_MLFLOW_WORKERS: ${CONTEXTGATE_MLFLOW_WORKERS:-1}
-      CONTEXTGATE_MLFLOW_ALLOWED_HOSTS: ${CONTEXTGATE_MLFLOW_ALLOWED_HOSTS:-localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,mlflow,mlflow:5000,host.docker.internal,host.docker.internal:5000}
-      CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS: ${CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS:-http://localhost:5000,http://127.0.0.1:5000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8001,http://127.0.0.1:8001}
+      CONTEXTGATE_MLFLOW_ALLOWED_HOSTS: ${CONTEXTGATE_MLFLOW_ALLOWED_HOSTS:-localhost,localhost:${CONTEXTGATE_MLFLOW_PORT:-5000},127.0.0.1,127.0.0.1:${CONTEXTGATE_MLFLOW_PORT:-5000},mlflow,mlflow:${CONTEXTGATE_MLFLOW_PORT:-5000},host.docker.internal,host.docker.internal:${CONTEXTGATE_MLFLOW_PORT:-5000}}
+      CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS: ${CONTEXTGATE_MLFLOW_CORS_ALLOWED_ORIGINS:-http://localhost:${CONTEXTGATE_MLFLOW_PORT:-5000},http://127.0.0.1:${CONTEXTGATE_MLFLOW_PORT:-5000},http://localhost:${CONTEXTGATE_API_PORT:-8000},http://127.0.0.1:${CONTEXTGATE_API_PORT:-8000},http://localhost:${CONTEXTGATE_CHAINLIT_PORT:-8001},http://127.0.0.1:${CONTEXTGATE_CHAINLIT_PORT:-8001}}
       CONTEXTGATE_MLFLOW_SUPPRESS_UPSTREAM_WARNINGS: ${CONTEXTGATE_MLFLOW_SUPPRESS_UPSTREAM_WARNINGS:-true}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${CONTEXTGATE_MLFLOW_PORT:-5000}:${CONTEXTGATE_MLFLOW_PORT:-5000}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_MLFLOW_PORT:-5000}:${CONTEXTGATE_MLFLOW_PORT:-5000}"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${CONTEXTGATE_MLFLOW_PORT:-5000}/health')\"",
+          "python -c \"from contextgate.apps.mlflow.main import healthcheck; healthcheck()\"",
         ]
       interval: 10s
       timeout: 5s
-      retries: 30
+      retries: 3
+      start_period: 60s
     volumes:
       - mlflow-artifacts:/mlartifacts
+    restart: unless-stopped
 
   api:
     <<: *contextgate-image
     command:
       - sh
       - -c
-      - alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head && uvicorn contextgate.apps.api.main:app --host ${CONTEXTGATE_API_BIND_HOST:-0.0.0.0} --port ${CONTEXTGATE_API_PORT:-8000}
+      - alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head && uvicorn contextgate.apps.api.main:app --host ${CONTEXTGATE_API_BIND_HOST:-0.0.0.0} --port ${CONTEXTGATE_API_PORT:-8000} --workers ${CONTEXTGATE_API_WORKERS:-1}
     environment: *contextgate-env
     depends_on:
       postgres:
@@ -141,23 +184,22 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-      mlflow:
-        condition: service_healthy
     ports:
-      - "${CONTEXTGATE_API_PORT:-8000}:${CONTEXTGATE_API_PORT:-8000}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_API_PORT:-8000}:${CONTEXTGATE_API_PORT:-8000}"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${CONTEXTGATE_API_PORT:-8000}/health')\"",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${CONTEXTGATE_API_PORT:-8000}/ready')\"",
         ]
       interval: 10s
       timeout: 5s
       retries: 30
     volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
+      - ${CONTEXTGATE_DATA_VOLUME:-contextgate-data}:/app/data
+      - ${CONTEXTGATE_REPORTS_VOLUME:-contextgate-reports}:/app/reports
       - model-cache:/models
+    restart: unless-stopped
 
   worker:
     <<: *contextgate-image
@@ -173,12 +215,14 @@ services:
       api:
         condition: service_healthy
     volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
+      - ${CONTEXTGATE_DATA_VOLUME:-contextgate-data}:/app/data
+      - ${CONTEXTGATE_REPORTS_VOLUME:-contextgate-reports}:/app/reports
       - model-cache:/models
+    restart: unless-stopped
 
   chainlit:
     <<: *contextgate-image
+    profiles: ["ui", "demo"]
     command:
       - chainlit
       - run
@@ -196,9 +240,25 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${CONTEXTGATE_CHAINLIT_PORT:-8001}:${CONTEXTGATE_CHAINLIT_PORT:-8001}"
+      - "${CONTEXTGATE_HOST_BIND_ADDRESS:-127.0.0.1}:${CONTEXTGATE_CHAINLIT_PORT:-8001}:${CONTEXTGATE_CHAINLIT_PORT:-8001}"
+    restart: unless-stopped
+
+  demo-init:
+    <<: *contextgate-image
+    profiles: ["demo"]
+    command: ["ctxgate", "seed-demo"]
+    environment: *contextgate-env
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ${CONTEXTGATE_DATA_VOLUME:-contextgate-data}:/app/data
+      - ${CONTEXTGATE_REPORTS_VOLUME:-contextgate-reports}:/app/reports
+      - model-cache:/models
 
 volumes:
+  contextgate-data:
+  contextgate-reports:
   mlflow-artifacts:
   model-cache:
   postgres-18-data:
