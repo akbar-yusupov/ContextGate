@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 import mlflow
 import pandas as pd
-from mlflow.data import from_pandas
+from mlflow.data.pandas_dataset import from_pandas
 from sqlalchemy.orm import Session
 
 from contextgate.adapters.mlflow.reporting import write_html_report
