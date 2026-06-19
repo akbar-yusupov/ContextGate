@@ -23,6 +23,20 @@ class Chunk:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def _hard_wrap(text: str, limit: int) -> Iterator[str]:
+    remaining = text.strip()
+    while len(remaining) > limit:
+        split_at = remaining.rfind(" ", 0, limit + 1)
+        if split_at < limit // 2:
+            split_at = limit
+        fragment = remaining[:split_at].strip()
+        if fragment:
+            yield fragment
+        remaining = remaining[split_at:].strip()
+    if remaining:
+        yield remaining
+
+
 def iter_chunks(
     sections: Iterable[TextSection],
     *,
@@ -33,6 +47,7 @@ def iter_chunks(
 ) -> Iterator[Chunk]:
     chunk_index = 0
     buffer = ""
+    fragment_chars = max(target_chars - overlap_chars - 1, 1)
     metadata: dict[str, Any] = {}
     source = document_id
 
@@ -60,16 +75,17 @@ def iter_chunks(
         for paragraph in paragraphs:
             if len(buffer) + len(paragraph) + 2 > target_chars and buffer and (chunk := flush()):
                 yield chunk
-            if len(paragraph) > target_chars * 2:
+            if len(paragraph) > fragment_chars:
                 sentences = re.split(r"(?<=[.!?])\s+", paragraph)
                 for sentence in sentences:
-                    if (
-                        len(buffer) + len(sentence) + 1 > target_chars
-                        and buffer
-                        and (chunk := flush())
-                    ):
-                        yield chunk
-                    buffer = f"{buffer} {sentence}".strip()
+                    for fragment in _hard_wrap(sentence, fragment_chars):
+                        if (
+                            len(buffer) + len(fragment) + 1 > target_chars
+                            and buffer
+                            and (chunk := flush())
+                        ):
+                            yield chunk
+                        buffer = f"{buffer} {fragment}".strip()
             else:
                 buffer = f"{buffer}\n\n{paragraph}".strip()
     if chunk := flush():

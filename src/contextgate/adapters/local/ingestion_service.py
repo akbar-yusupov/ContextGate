@@ -12,12 +12,38 @@ from sqlalchemy.orm import Session
 
 from contextgate.adapters.local.loaders import iter_document_paths, iter_sections
 from contextgate.adapters.qdrant.vector_index import VectorStore, get_vector_store
-from contextgate.adapters.sqlalchemy import Document, Job
+from contextgate.adapters.sqlalchemy import Document, Job, KnowledgeBase
 from contextgate.adapters.sqlalchemy.lookup import get_knowledge_base
 from contextgate.config import Settings, get_settings
 from contextgate.domain.documents import Chunk, iter_chunks
 from contextgate.domain.language import detect_language
 from contextgate.observability.metrics import INGESTED_CHUNKS
+
+DOCUMENT_EXTERNAL_ID_MAX_LENGTH = 240
+
+
+def _bounded_identifier(value: str, *, max_length: int = DOCUMENT_EXTERNAL_ID_MAX_LENGTH) -> str:
+    if len(value) <= max_length:
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return f"{value[: max_length - len(digest) - 1].rstrip('-')}-{digest}"
+
+
+def _ingestion_error(exc: Exception) -> str:
+    message = str(exc)
+    lowered = message.lower()
+    if "dimension" in lowered or "incompatible qdrant collection" in lowered:
+        return (
+            f"{message}. Embedding dimensions are fixed by the selected models and by the "
+            "existing Qdrant collection. Restore the matching model/dimension settings, or use "
+            "a new knowledge base (or reset only disposable demo volumes) before re-ingesting."
+        )
+    if "value too long" in lowered:
+        return (
+            f"{message}. A configured identifier exceeds its database limit; check pipeline and "
+            "idempotency values. Document paths are bounded automatically."
+        )
+    return message
 
 
 def file_hash(path: Path) -> str:
@@ -33,9 +59,20 @@ def document_external_id(document_path: Path, root: Path) -> str:
     without_suffix = str(Path(relative).with_suffix("")).replace("\\", "/").lower()
     normalized = re.sub(r"[^a-z0-9]+", "-", without_suffix).strip("-")
     if "/" not in without_suffix and normalized:
-        return normalized
+        return _bounded_identifier(normalized)
     digest = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:8]
-    return f"{normalized or 'document'}-{digest}"
+    return _bounded_identifier(f"{normalized or 'document'}-{digest}")
+
+
+def _lock_knowledge_base(session: Session, identifier: str) -> KnowledgeBase:
+    knowledge_base = session.scalar(
+        select(KnowledgeBase)
+        .where((KnowledgeBase.slug == identifier) | (KnowledgeBase.id == identifier))
+        .with_for_update()
+    )
+    if knowledge_base is None:
+        raise ValueError(f"Knowledge base not found: {identifier}")
+    return knowledge_base
 
 
 class IngestionService:
@@ -62,11 +99,17 @@ class IngestionService:
         ingested = 0
         skipped = 0
         failures: list[dict[str, str]] = []
+        cancelled = False
 
         for index, document_path in enumerate(paths):
+            if job:
+                session.refresh(job)
+                if job.status == "cancelled":
+                    cancelled = True
+                    break
             content_hash = ""
             external_id = ""
-            kb = get_knowledge_base(session, knowledge_base)
+            kb = _lock_knowledge_base(session, knowledge_base)
             try:
                 content_hash = file_hash(document_path)
                 duplicate = session.scalar(
@@ -81,7 +124,11 @@ class IngestionService:
                     skipped += 1
                     continue
 
-                section_iterator = iter_sections(document_path)
+                section_iterator = iter_sections(
+                    document_path,
+                    max_pdf_pages=self.settings.max_pdf_pages,
+                    max_extracted_chars=self.settings.max_extracted_chars,
+                )
                 sampled_sections = []
                 sample_size = 0
                 while sample_size < 2_000:
@@ -148,6 +195,8 @@ class IngestionService:
                 for previous in previous_documents:
                     previous.status = "superseded"
                 document.status = "ready"
+                kb.corpus_version += 1
+                session.add(kb)
                 session.commit()
                 INGESTED_CHUNKS.inc(count)
                 total_chunks += count
@@ -161,7 +210,7 @@ class IngestionService:
                             external_id,
                             content_hash,
                         )
-                failures.append({"source": document_path.name, "error": str(exc)})
+                failures.append({"source": document_path.name, "error": _ingestion_error(exc)})
             finally:
                 if job:
                     job.progress = (index + 1) / max(len(paths), 1)
@@ -174,9 +223,17 @@ class IngestionService:
             "skipped": skipped,
             "chunks": total_chunks,
             "failures": failures,
+            "outcome": (
+                "cancelled"
+                if cancelled
+                else "failed"
+                if failures and not ingested and not skipped
+                else "succeeded_with_errors"
+                if failures
+                else "succeeded"
+            ),
         }
         if job:
-            job.status = "failed" if failures and not ingested else "succeeded"
             job.result = result
             job.progress = 1
             session.add(job)
@@ -191,10 +248,11 @@ class IngestionService:
         *,
         job: Job | None = None,
     ) -> dict[str, Any]:
-        kb = get_knowledge_base(session, knowledge_base)
+        kb = _lock_knowledge_base(session, knowledge_base)
         target = f"{kb.collection_name}-sync"
         copied = self.store.copy_collection(source_collection, target)
         kb.collection_name = target
+        kb.corpus_version += 1
         session.add(kb)
         result = {
             "source_collection": source_collection,

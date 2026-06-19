@@ -58,7 +58,7 @@ class VectorStore:
     def close(self) -> None:
         self.client.close()
 
-    def _validate_collection(self, collection_name: str) -> None:
+    def validate_collection(self, collection_name: str) -> None:
         info = self.client.get_collection(collection_name)
         params = info.config.params
         vectors = params.vectors
@@ -100,6 +100,10 @@ class VectorStore:
             details = "; ".join(errors)
             raise ValueError(f"Incompatible Qdrant collection {collection_name}: {details}")
 
+    def validate_collection_if_exists(self, collection_name: str) -> None:
+        if self.client.collection_exists(collection_name):
+            self.validate_collection(collection_name)
+
     def _ensure_payload_indexes(self, collection_name: str) -> None:
         schema_types = {
             "keyword": models.PayloadSchemaType.KEYWORD,
@@ -133,7 +137,7 @@ class VectorStore:
 
     def ensure_collection(self, collection_name: str) -> None:
         if self.client.collection_exists(collection_name):
-            self._validate_collection(collection_name)
+            self.validate_collection(collection_name)
             self._ensure_payload_indexes(collection_name)
             return
         self.client.create_collection(
@@ -590,7 +594,7 @@ class VectorStore:
                 copied += len(points)
             if offset is None:
                 break
-        self._validate_collection(target)
+        self.validate_collection(target)
         self._ensure_payload_indexes(target)
         return copied
 
