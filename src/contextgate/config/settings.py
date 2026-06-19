@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -21,8 +22,9 @@ def _mlflow_local_path(value: str) -> Path:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=None,
         env_prefix="CONTEXTGATE_",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
@@ -37,6 +39,9 @@ class Settings(BaseSettings):
     database_name: str = "contextgate"
     database_user: str = "contextgate"
     database_password: str = "contextgate-dev-password"
+    database_pool_size: int = 10
+    database_max_overflow: int = 5
+    database_pool_timeout_seconds: float = 10
 
     qdrant_url: str | None = None
     qdrant_host: str | None = None
@@ -55,6 +60,7 @@ class Settings(BaseSettings):
     mlflow_tracking_scheme: Literal["http", "https"] = "http"
     mlflow_tracking_host: str | None = None
     mlflow_tracking_port: int = 5000
+    mlflow_public_url: str = "http://localhost:5000"
     mlflow_database_name: str = "mlflow"
     mlflow_registry_store_uri: str | None = None
     mlflow_artifact_root: str = "/mlartifacts"
@@ -73,15 +79,29 @@ class Settings(BaseSettings):
     mlflow_suppress_upstream_warnings: bool = True
 
     ui_api_url: str = "http://localhost:8000"
+    api_public_url: str = "http://localhost:8000"
     api_key: str = "contextgate-dev-key"
     auth_enabled: bool = False
+    rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 120
+    rate_limit_fail_open: bool = True
 
     policies_path: Path = Path("configs/policies.yaml")
     upload_dir: Path = Path("./data/uploads")
+    max_upload_bytes: int = 20 * 1024 * 1024
+    max_pdf_pages: int = 500
+    max_extracted_chars: int = 10_000_000
     report_dir: Path = Path("./reports")
+    evaluation_dataset_dir: Path = Path("./data/evaluations")
     router_dir: Path = Path("./data/routers")
-    pipeline_version: str = "v1"
+    router_min_release_cases: int = 200
+    router_min_unanswerable_cases: int = 50
+    router_min_cases_per_language: int = 30
+    router_required_languages: str = "en,ru,uz"
+    router_max_false_answer_upper_95: float = 0.02
+    router_min_citation_lower_95: float = 0.98
+    router_min_claim_support_lower_95: float = 0.95
+    pipeline_version: str = Field(default="v1", min_length=1, max_length=32)
 
     dense_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     dense_dimension: int = 384
@@ -100,6 +120,19 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     llm_api_base: str | None = None
     llm_api_key: str | None = None
+    llm_input_cost_per_1m_tokens: float | None = None
+    llm_output_cost_per_1m_tokens: float | None = None
+    llm_max_output_tokens: int = 512
+    llm_timeout_seconds: float = 60
+    llm_max_retries: int = 2
+    llm_circuit_failure_threshold: int = 5
+    llm_circuit_cooldown_seconds: float = 30
+    allow_provisional_streaming: bool = False
+    graph_checkpointing_enabled: bool = False
+    trace_content_mode: Literal["full", "metadata"] = "full"
+    trace_retention_days: int = 30
+    worker_task_soft_time_limit_seconds: int = 300
+    worker_task_time_limit_seconds: int = 330
     default_knowledge_base: str = "demo"
 
     @property
@@ -183,6 +216,7 @@ class Settings(BaseSettings):
             self.sqlite_path.parent,
             self.upload_dir,
             self.report_dir,
+            self.evaluation_dataset_dir,
             self.router_dir,
             _mlflow_local_path(self.mlflow_tracking_uri or str(self.mlflow_tracking_path))
             if not self.mlflow_tracking_host
@@ -194,9 +228,20 @@ class Settings(BaseSettings):
         ):
             path.mkdir(parents=True, exist_ok=True)
 
+    def validate_runtime_security(self) -> None:
+        if self.environment.lower() not in {"production", "prod"}:
+            return
+        if not self.auth_enabled:
+            raise ValueError("CONTEXTGATE_AUTH_ENABLED must be true in production")
+        if not self.api_key or self.api_key == "contextgate-dev-key":
+            raise ValueError("A non-default CONTEXTGATE_API_KEY is required in production")
+        if not self.redis_password:
+            raise ValueError("CONTEXTGATE_REDIS_PASSWORD is required in production")
+
 
 @lru_cache
 def get_settings() -> Settings:
-    settings = Settings()
+    env_file = os.getenv("CONTEXTGATE_ENV_FILE", ".env").strip()
+    settings = Settings(_env_file=env_file or None)
     settings.prepare_directories()
     return settings

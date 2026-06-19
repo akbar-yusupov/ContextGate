@@ -17,6 +17,7 @@ class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    SUCCEEDED_WITH_ERRORS = "succeeded_with_errors"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
@@ -28,6 +29,7 @@ class KnowledgeBase:
     name: str
     collection_name: str
     description: str = ""
+    corpus_version: int = 0
 
 
 @dataclass(slots=True, frozen=True)

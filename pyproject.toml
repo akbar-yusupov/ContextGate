@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "contextgate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-Gated RAG Gateway for retrieval, citations, traces, cost and provider routing."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,7 +35,7 @@ dependencies = [
   "psycopg-pool>=3.2,<4",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
-  "pypdf>=5,<7",
+  "pypdf>=6.13.3,<7",
   "python-multipart>=0.0.20,<1",
   "pyyaml>=6,<7",
   "qdrant-client>=1.14,<2",
@@ -52,7 +52,9 @@ llm = ["litellm>=1.70,<2"]
 ui = ["chainlit>=2.5,<3", "httpx>=0.28,<1"]
 dev = [
   "deptry>=0.25,<1",
+  "httpx>=0.28,<1",
   "mypy>=1.15,<2",
+  "openai>=2,<3",
   "pytest>=9.0.3,<10",
   "pytest-cov>=7,<8",
   "ruff>=0.11,<1",
@@ -96,4 +98,4 @@ show_missing = true
 
 [tool.deptry]
 optional_dependencies_dev_groups = ["dev"]
-per_rule_ignores = { DEP002 = ["python-multipart"] }
+per_rule_ignores = { DEP002 = ["contextgate", "python-multipart"] }

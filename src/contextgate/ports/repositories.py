@@ -35,7 +35,13 @@ class UnitOfWork(Protocol):
         kind: str,
         payload: dict[str, Any],
         idempotency_key: str | None = None,
-    ) -> Any: ...
+    ) -> tuple[Any, bool]: ...
+
+    def promote_router_version(self, run_id: str, knowledge_base: str) -> None: ...
+
+    def mark_job_enqueued(self, job_id: str) -> None: ...
+
+    def pending_job_dispatches(self) -> list[tuple[str, str]]: ...
 
 
 class UnitOfWorkFactory(Protocol):
@@ -59,9 +65,13 @@ class JobRepository(Protocol):
 
     def set_progress(self, job_id: str, progress: float) -> None: ...
 
+    def cancel(self, job_id: str) -> Any: ...
+
 
 class JobQueue(Protocol):
     def enqueue(self, kind: str, job_id: str) -> None: ...
+
+    def cancel(self, job_id: str) -> None: ...
 
 
 class IngestionJobRunner(Protocol):
@@ -85,11 +95,22 @@ class CostLedger(Protocol):
 
 
 class TraceStore(Protocol):
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        correlation_id: str,
+        knowledge_base: str,
+        query: str,
+    ) -> None: ...
+
     def append_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> None: ...
 
     def list_events(self, run_id: str) -> list[dict[str, Any]]: ...
 
     def get_trace(self, run_id: str) -> dict[str, Any]: ...
+
+    def purge_older_than(self, days: int) -> int: ...
 
 
 class ProviderRegistry(Protocol):
@@ -104,6 +125,7 @@ class ProviderRegistry(Protocol):
         latency_budget_ms: float,
         allowed_providers: Sequence[str] | None = None,
         requested_provider: str | None = None,
+        max_context_tokens: int = 4096,
     ) -> str: ...
 
 
