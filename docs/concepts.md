@@ -4,7 +4,8 @@ This page explains the terms exposed by ContextGate APIs, traces and reports.
 
 ## Evidence Gate
 
-The evidence gate decides whether generation is allowed.
+The evidence gate decides whether generation is allowed and whether a generated draft may be
+released.
 
 It uses:
 
@@ -13,7 +14,12 @@ It uses:
 - `support_score`: how much of the draft answer is supported by retrieved context?
 - `evidence_score`: combined score used by the runtime gate.
 
-If retrieval is empty, evidence is weak, or citations fail validation, ContextGate abstains.
+After generation, every factual claim must resolve to cited evidence and pass the configured local
+semantic verifier. If retrieval is empty, evidence is weak, risk policy blocks the input, or claim
+verification fails, ContextGate releases no answer text.
+
+Final statuses are `answered`, `abstained`, and `blocked`. `grounded` remains a compatibility
+projection and is true only for `answered` responses.
 
 ## Abstention
 
@@ -27,24 +33,28 @@ Stable reasons:
 - `low_support`: retrieved evidence does not support the draft answer enough.
 - `invalid_citations`: generated citations do not map to retrieved chunks/ranks.
 - `budget_exceeded`: policy budget prevents generation.
+- `latency_budget_exceeded`: the end-to-end deadline expired.
+- `unsupported_claim`: at least one claim was not supported by its cited evidence.
+- `contradiction`: cited evidence contradicts a claim.
+- `unsafe_query` / `unsafe_context`: risk policy blocked untrusted instructions.
+- `provider_unavailable` / `verification_unavailable`: a required admission dependency was absent.
 
 Applications can branch on these values directly.
 
 ## Citations
 
-A citation is valid only if it references a retrieved chunk and a valid citation index. ContextGate
-does not treat citation-looking text as trusted by default.
+A citation is valid only when its index resolves to the same retrieved chunk and source. Each claim
+is then checked against only the chunks it cites.
 
 If a generated answer cites a missing chunk or impossible rank, the answer is marked `grounded=false`
 and the abstention reason becomes `invalid_citations`.
 
-## Unsupported Claims
+## Claim Verification
 
-The v0.1 unsupported-claim detector is lexical and intentionally simple. It surfaces terms in the
-answer that are absent from retrieved context. The detector is isolated in the domain layer so it can
-be replaced by a stronger verifier later.
-
-Use it as a failure-analysis signal, not as a final safety classifier.
+The no-provider baseline performs deterministic exact citation mapping and lexical claim checks.
+The default composed service additionally uses the configured multilingual embedding model for
+local semantic support scoring. The `ClaimVerifier` port can be replaced by an NLI or structured
+judge adapter without changing admission behavior. Verification fails closed.
 
 ## Retrieval Policies
 
@@ -81,6 +91,7 @@ Typical event order:
 ```text
 query_analyzed
 retrieval_started
+risk_checked
 retrieval_hit
 evidence_scored
 provider_selected
@@ -90,3 +101,6 @@ final
 ```
 
 Traces are meant for debugging, evaluation and regression review.
+
+`CONTEXTGATE_TRACE_CONTENT_MODE=metadata` stores a query hash rather than raw query text. Run,
+event, and cost records are purged after `CONTEXTGATE_TRACE_RETENTION_DAYS`.

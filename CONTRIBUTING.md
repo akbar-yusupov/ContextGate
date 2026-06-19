@@ -6,7 +6,7 @@
 uv sync --extra dev --extra ui --extra llm
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy src/contextgate
+uv run mypy src tests
 uv run deptry .
 uv audit --locked
 ```
@@ -16,6 +16,9 @@ locked runtime, optional and development dependencies against OSV. `python-multi
 unused-import exception because FastAPI loads it as a runtime plugin for file uploads.
 
 Use Python 3.12. Do not commit downloaded models, local databases, reports, or customer data.
+Read [AGENTS.md](AGENTS.md) for architecture invariants and [docs/repository-map.md](docs/repository-map.md)
+before changing a boundary. Documentation changes must keep OpenAPI examples and the Docker-first
+quickstart executable.
 
 ## Running tests locally
 

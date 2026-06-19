@@ -6,8 +6,8 @@ This page shows the common ContextGate workflows.
 
 ```bash
 cp .env.example .env
-docker compose up --build -d
-curl http://127.0.0.1:8000/health
+docker compose --profile demo up --build -d
+curl http://127.0.0.1:8000/ready
 ```
 
 Default API key:
@@ -16,14 +16,13 @@ Default API key:
 contextgate-dev-key
 ```
 
-MLflow starts with `CONTEXTGATE_MLFLOW_WORKERS=1` in local Compose to avoid slow multi-worker
-startup. Increase it in `.env` only after the stack is stable and you need more concurrent MLflow
-traffic.
+The demo profile seeds documents and starts Chainlit. Start MLflow separately with
+`docker compose --profile evaluation up -d mlflow` before evaluations.
 
 ## Run The Demo
 
 ```bash
-docker compose exec api ctxgate ingest demo/documents --knowledge-base demo
+docker compose --profile demo wait demo-init
 ```
 
 This loads the included multilingual support knowledge base into the `demo` knowledge base.
@@ -42,7 +41,7 @@ curl http://localhost:8000/api/v1/runs/answer \
   }'
 ```
 
-You should see `grounded: true`, `abstention_reason: null` and a citation to
+You should see `status: "answered"`, `grounded: true`, `abstention_reason: null` and a citation to
 `cancel-order-en.md`.
 
 Ask an unanswerable demo question:
@@ -59,19 +58,23 @@ curl http://localhost:8000/api/v1/runs/answer \
   }'
 ```
 
-You should see `provider: "abstention"`, `grounded: false`, no citations and a stable
-`abstention_reason`.
+You should see `status: "abstained"`, an empty `answer`, no citations and a stable reason.
 
 For the full benchmark/router demo:
 
 ```bash
-docker compose exec api ctxgate demo
+docker compose --profile evaluation up -d --build --wait mlflow
+docker compose exec api ctxgate demo --with-evaluation
 ```
 
 It ingests multilingual support documents, prints one grounded answer and one abstention, runs the
 QA Gate evaluation over `demo/benchmark.jsonl`, trains a router and keeps `balanced` as fallback if
 release gates fail. The generated HTML report starts with false answers, false abstentions,
 citation validity, latency and cost per answer.
+
+The bundled 150-query dataset intentionally cannot satisfy the default 200-query promotion gate.
+Use it to verify admission, evidence, traces, costs, reports, and MLflow lifecycle behavior; use a
+separate untouched release set with production embeddings for an actual promotion decision.
 
 ## Create A Knowledge Base
 
@@ -146,12 +149,16 @@ curl http://localhost:8000/api/v1/runs/answer \
 
 Read these fields first:
 
+- `status`
 - `grounded`
 - `evidence_score`
 - `abstention_reason`
 - `retrieval.trace_id`
 - `selected_provider`
 - `citations`
+- `evidence_report`
+
+Do not send a hard cost budget for a paid model until its input and output prices are configured.
 
 ## Use OpenAI-Compatible Chat
 
@@ -222,6 +229,9 @@ Run the gateway-level benchmark:
 ctxgate benchmark ./evaluation.jsonl --knowledge-base support --evaluate-answers
 ```
 
+For the API, first upload the JSONL file to `/api/v1/evaluations/datasets`, then use the returned
+`dataset_id` as `dataset_path` in `/api/v1/evaluations`. Server-local paths are rejected.
+
 With `--evaluate-answers`, ContextGate calls the same `AnswerWithEvidence` runtime used by
 `/api/v1/runs/answer` and `/v1/chat/completions`. The report answers:
 
@@ -236,7 +246,14 @@ Train and promote a router:
 ```bash
 ctxgate router train BENCHMARK_RUN_ID --knowledge-base support
 ctxgate router promote BENCHMARK_RUN_ID --knowledge-base support
+ctxgate router rollback PREVIOUS_RUN_ID --knowledge-base support
 ```
 
 Promotion should be treated as a release decision: quality, latency and cost gates must pass before
 `auto` becomes better than a fixed fallback.
+
+## Manage API Keys
+
+Bootstrap keys have `read`, `write`, and `admin`. Create a least-privilege key through
+`POST /api/v1/api-keys`; the plaintext key is returned once. Rotate it through
+`POST /api/v1/api-keys/{id}/rotate` and disable it with `DELETE /api/v1/api-keys/{id}`.

@@ -17,7 +17,7 @@ Connect documents
 ```
 
 ContextGate is not a chatbot template. It is API-first infrastructure for teams building
-production-ish RAG systems that need answer admission control, traceable citations, cost/latency
+production-oriented RAG systems that need answer admission control, traceable citations, cost/latency
 metadata, OpenAI-compatible serving, MLflow evaluation, and policy promotion evidence.
 
 ## Why Not Just Ask Claude Or OpenAI?
@@ -51,8 +51,8 @@ Do not use ContextGate if you need:
 
 - a drag-and-drop chatbot builder;
 - a CMS or document authoring system;
-- OCR, image/table extraction or scanned PDF parsing in v0.1;
-- multi-tenant RBAC in v0.1;
+- OCR, image/table extraction or scanned PDF parsing in v0.2;
+- multi-tenant RBAC in v0.2;
 - a full prompt-injection security platform.
 
 ## 5-Minute Demo
@@ -61,13 +61,15 @@ Requirements: Docker Compose. The demo works without GPU and without a paid LLM;
 extractive fallback provider.
 
 ```bash
-cp .env.example .env
-docker compose up --build -d postgres redis qdrant mlflow api
-docker compose exec api ctxgate ingest demo/documents --knowledge-base demo
+docker compose --env-file .env.example --profile demo up --build
 ```
 
+The `demo` profile starts the core services and Chainlit, waits for the API, and seeds the demo
+knowledge base once. It does not require a paid generation provider. Use
+`docker compose --profile evaluation up -d mlflow` only when running MLflow-backed evaluations.
+
 This loads 27 multilingual Markdown policy documents into the `demo` knowledge base. The first run
-downloads embedding models into the Docker `model-cache` volume; later runs are faster.
+uses deterministic local embeddings and requires no model download or paid provider.
 
 Services:
 
@@ -75,7 +77,7 @@ Services:
 |---|---|
 | FastAPI/OpenAPI | http://localhost:8000/docs |
 | Chainlit operator console | http://localhost:8001 |
-| MLflow | http://localhost:5000 |
+| MLflow (`evaluation` profile) | http://localhost:5000 |
 | Qdrant | http://localhost:6333/dashboard |
 
 Development API key: `contextgate-dev-key`.
@@ -88,12 +90,18 @@ Quick test questions:
 Full QA gate benchmark/router demo:
 
 ```bash
-docker compose exec api ctxgate demo
+docker compose --profile evaluation up -d --build --wait mlflow
+docker compose exec api ctxgate demo --with-evaluation
 ```
 
 The demo prints one grounded answer, one structured abstention, and a QA Gate report path. The HTML
 report starts with answer rate, abstention rate, false answer rate, false abstention rate, citation
 validity and the concrete failed cases.
+
+Expected result: the router candidate remains unpromoted and `balanced` stays active. The bundled
+synthetic dataset has 150 queries, below the default 200-query release minimum, and deterministic
+64/32 embeddings are intentionally a fast smoke-test backend. A high false-abstention rate is a
+visible limitation to investigate, not a metric to present as production retrieval quality.
 
 For local Python development:
 
@@ -138,6 +146,7 @@ Expected response shape:
   "citations": [{"index": 1, "chunk_id": "cancel-order-en:0", "source": "cancel-order-en.md"}],
   "provider": "extractive",
   "selected_provider": "extractive",
+  "status": "answered",
   "grounded": true,
   "evidence_score": 0.82,
   "abstention_reason": null,
@@ -154,10 +163,11 @@ When evidence is insufficient:
 
 ```json
 {
-  "answer": "I could not answer from grounded evidence in the knowledge base. Abstention reason: retrieval_empty.",
+  "answer": "",
   "citations": [],
   "provider": "abstention",
   "selected_provider": "abstention",
+  "status": "abstained",
   "grounded": false,
   "evidence_score": 0.0,
   "abstention_reason": "retrieval_empty",
@@ -206,6 +216,14 @@ curl http://localhost:8000/api/v1/runs/{run_id}/trace -H "X-API-Key: contextgate
 curl http://localhost:8000/api/v1/runs/{run_id}/cost  -H "X-API-Key: contextgate-dev-key"
 ```
 
+Native streaming uses `stream_mode: "verified"` to emit live lifecycle events and release answer
+tokens only after verification. `stream_mode: "provisional"` forwards real provider deltas and can
+end with a retraction; it is disabled unless `CONTEXTGATE_ALLOW_PROVISIONAL_STREAMING=true`.
+
+Hard model cost budgets require `CONTEXTGATE_LLM_INPUT_COST_PER_1M_TOKENS` and
+`CONTEXTGATE_LLM_OUTPUT_COST_PER_1M_TOKENS`. A model with unknown pricing is not eligible under a
+hard budget. ContextGate records configured pricing, provider usage and actual/estimated cost.
+
 ## What It Does
 
 - Ingests PDF, Markdown, HTML and TXT into managed Qdrant collections.
@@ -214,6 +232,17 @@ curl http://localhost:8000/api/v1/runs/{run_id}/cost  -H "X-API-Key: contextgate
 - Serves native `/api/v1/*` APIs and OpenAI-compatible `/v1/chat/completions`.
 - Persists durable jobs, policies, traces, run events and cost records.
 - Logs MLflow experiments, router artifacts, dataset fingerprints and QA Gate HTML reports.
+
+## Advantages And Tradeoffs
+
+ContextGate enforces answer/abstain/block decisions, exact citation resolution, claim reports,
+risk short-circuiting, provider/budget/deadline selection, durable jobs, and auditable traces. The
+demo works without a paid provider and the adapter boundaries make providers and stores replaceable.
+
+The tradeoff is operational weight: the full stack includes PostgreSQL, Redis, Qdrant, and a worker.
+The local semantic verifier is a practical baseline rather than a formal proof, risk rules are not a
+complete injection firewall, verified streaming buffers text, and the included synthetic dataset is
+not evidence of production superiority. See [Advantages and limitations](docs/limitations.md).
 
 ## Core Concepts
 
@@ -251,6 +280,7 @@ POST /api/v1/retrieve
 POST /api/v1/runs/answer
 GET  /api/v1/runs/{run_id}/trace
 GET  /api/v1/runs/{run_id}/cost
+POST /api/v1/evaluations/datasets
 POST /api/v1/evaluations
 POST /api/v1/routers/train
 POST /api/v1/routers/promote
@@ -305,12 +335,14 @@ uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
 
 ## Documentation
 
-- [Product](docs/product.md): audience, use cases, non-goals and project promise.
-- [Concepts](docs/concepts.md): evidence gate, retrieval policies, citations, traces and routing.
-- [Workflows](docs/workflows.md): ingest, answer, inspect, evaluate and promote.
-- [Architecture](docs/architecture.md): clean architecture, runtime, jobs and adapters.
-- [Demo Quickstart](demo/README.md): load demo data, ask grounded/unanswerable questions.
-- [Demo Dataset](demo/DATASET.md): multilingual benchmark dataset details.
+- [Documentation index](docs/index.md)
+- [Getting started](docs/getting-started.md)
+- [Services and entities](docs/services.md), [API](docs/api.md), and
+  [configuration](docs/configuration.md)
+- [Architecture](docs/architecture.md) and [repository map](docs/repository-map.md)
+- [Deployment](docs/deployment.md), [operations](docs/operations.md), and
+  [troubleshooting](docs/troubleshooting.md)
+- [AI integration](docs/ai-integration.md) and [launch notes](docs/launch.md)
 
 ## Verification
 
@@ -336,18 +368,18 @@ docker compose config --quiet
 docker build -t contextgate:local .
 ```
 
-Smoke:
+Docker demo acceptance:
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres redis qdrant mlflow api
-curl http://127.0.0.1:8000/health
+docker compose --env-file .env.example --profile demo up --build
+curl http://127.0.0.1:8000/ready
 ```
 
 ## Status
 
-`v0.1.0-alpha`. Single-tenant by design for now. API keys, rate limits, idempotency, durable jobs,
-traces, cost ledger, typed errors and observability are implemented in a production-shaped way.
+`v0.2.0-alpha`, production-oriented and single-tenant by design. The admission result is `answered`, `abstained`, or
+`blocked`; abstained and blocked responses never include answer text. See
+[the v0.2 migration guide](docs/migration-v0.2.md) before upgrading an existing installation.
 
 ## License
 

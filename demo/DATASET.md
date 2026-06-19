@@ -12,9 +12,7 @@ Use this dataset when starting ContextGate for the first time. It gives you:
 Quick start:
 
 ```bash
-cp .env.example .env
-docker compose up --build -d postgres redis qdrant mlflow api
-docker compose exec api ctxgate ingest demo/documents --knowledge-base demo
+docker compose --env-file .env.example --profile demo up --build
 ```
 
 Then ask:

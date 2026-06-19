@@ -1,0 +1,3453 @@
+{
+  "components": {
+    "schemas": {
+      "AnswerRequest": {
+        "properties": {
+          "allowed_providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Providers",
+            "type": "array"
+          },
+          "cost_budget_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Usd"
+          },
+          "debug": {
+            "default": false,
+            "title": "Debug",
+            "type": "boolean"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetrievalFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gateway_policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Policy Id"
+          },
+          "knowledge_base": {
+            "title": "Knowledge Base",
+            "type": "string"
+          },
+          "latency_budget_ms": {
+            "default": 1000,
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Budget Ms",
+            "type": "number"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Provider"
+          },
+          "max_context_tokens": {
+            "default": 4096,
+            "maximum": 128000.0,
+            "minimum": 256.0,
+            "title": "Max Context Tokens",
+            "type": "integer"
+          },
+          "policy": {
+            "default": "auto",
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate",
+              "auto"
+            ],
+            "title": "Policy",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "stream_mode": {
+            "default": "none",
+            "enum": [
+              "none",
+              "verified",
+              "provisional"
+            ],
+            "title": "Stream Mode",
+            "type": "string"
+          },
+          "system_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompt"
+          }
+        },
+        "required": [
+          "knowledge_base",
+          "query"
+        ],
+        "title": "AnswerRequest",
+        "type": "object"
+      },
+      "AnswerResponse": {
+        "properties": {
+          "abstention_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstention Reason"
+          },
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "answerability_score": {
+            "default": 0.0,
+            "title": "Answerability Score",
+            "type": "number"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "cost": {
+            "additionalProperties": true,
+            "title": "Cost",
+            "type": "object"
+          },
+          "coverage_score": {
+            "default": 0.0,
+            "title": "Coverage Score",
+            "type": "number"
+          },
+          "evidence_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Report"
+          },
+          "evidence_score": {
+            "default": 0.0,
+            "title": "Evidence Score",
+            "type": "number"
+          },
+          "grounded": {
+            "title": "Grounded",
+            "type": "boolean"
+          },
+          "policy_snapshot": {
+            "additionalProperties": true,
+            "title": "Policy Snapshot",
+            "type": "object"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "rejected_claims": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rejected Claims",
+            "type": "array"
+          },
+          "retrieval": {
+            "$ref": "#/components/schemas/RetrieveResponse"
+          },
+          "risk_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Report"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "selected_provider": {
+            "default": "extractive",
+            "title": "Selected Provider",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnswerStatus",
+            "default": "answered"
+          },
+          "support_score": {
+            "default": 0.0,
+            "title": "Support Score",
+            "type": "number"
+          },
+          "unsupported_claims": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer",
+          "citations",
+          "retrieval",
+          "provider",
+          "grounded"
+        ],
+        "title": "AnswerResponse",
+        "type": "object"
+      },
+      "AnswerStatus": {
+        "enum": [
+          "answered",
+          "abstained",
+          "blocked"
+        ],
+        "title": "AnswerStatus",
+        "type": "string"
+      },
+      "ApiKeyCreateRequest": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "read",
+                "write",
+                "admin"
+              ],
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ApiKeyCreateRequest",
+        "type": "object"
+      },
+      "ApiKeyResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "scopes"
+        ],
+        "title": "ApiKeyResponse",
+        "type": "object"
+      },
+      "BenchmarkRequest": {
+        "properties": {
+          "dataset_path": {
+            "title": "Dataset Path",
+            "type": "string"
+          },
+          "evaluate_answers": {
+            "default": false,
+            "title": "Evaluate Answers",
+            "type": "boolean"
+          },
+          "knowledge_base": {
+            "title": "Knowledge Base",
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "enum": [
+                "fast",
+                "balanced",
+                "accurate"
+              ],
+              "type": "string"
+            },
+            "title": "Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "knowledge_base",
+          "dataset_path"
+        ],
+        "title": "BenchmarkRequest",
+        "type": "object"
+      },
+      "Body_upload_document": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document",
+        "type": "object"
+      },
+      "Body_upload_evaluation_dataset": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_evaluation_dataset",
+        "type": "object"
+      },
+      "Citation": {
+        "properties": {
+          "chunk_id": {
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "chunk_id",
+          "source"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "DocumentRead": {
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "knowledge_base_id": {
+            "title": "Knowledge Base Id",
+            "type": "string"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "pipeline_version": {
+            "title": "Pipeline Version",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "knowledge_base_id",
+          "source",
+          "external_id",
+          "content_hash",
+          "pipeline_version",
+          "status",
+          "created_at"
+        ],
+        "title": "DocumentRead",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobRead": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_json": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Json"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "retry_count": {
+            "default": 0,
+            "title": "Retry Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "progress",
+          "error",
+          "result"
+        ],
+        "title": "JobRead",
+        "type": "object"
+      },
+      "KnowledgeBaseCreate": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "title": "KnowledgeBaseCreate",
+        "type": "object"
+      },
+      "KnowledgeBaseRead": {
+        "properties": {
+          "collection_name": {
+            "title": "Collection Name",
+            "type": "string"
+          },
+          "corpus_version": {
+            "default": 0,
+            "title": "Corpus Version",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "id",
+          "collection_name",
+          "created_at"
+        ],
+        "title": "KnowledgeBaseRead",
+        "type": "object"
+      },
+      "PolicyCreateRequest": {
+        "properties": {
+          "cost_budget_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Usd"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "latency_budget_ms": {
+            "default": 1000,
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Budget Ms",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_policy": {
+            "default": "extractive",
+            "title": "Provider Policy",
+            "type": "string"
+          },
+          "retrieval_policy": {
+            "default": "balanced",
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate"
+            ],
+            "title": "Retrieval Policy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PolicyCreateRequest",
+        "type": "object"
+      },
+      "PolicyRead": {
+        "properties": {
+          "cost_budget_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Usd"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "latency_budget_ms": {
+            "default": 1000,
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Budget Ms",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_policy": {
+            "default": "extractive",
+            "title": "Provider Policy",
+            "type": "string"
+          },
+          "retrieval_policy": {
+            "default": "balanced",
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate"
+            ],
+            "title": "Retrieval Policy",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "PolicyRead",
+        "type": "object"
+      },
+      "ProviderTestRequest": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "title": "ProviderTestRequest",
+        "type": "object"
+      },
+      "RetrievalFilter": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Document Ids",
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "title": "Metadata",
+            "type": "object"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "title": "RetrievalFilter",
+        "type": "object"
+      },
+      "RetrievalHit": {
+        "properties": {
+          "chunk_id": {
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chunk_id",
+          "document_id",
+          "source",
+          "text",
+          "language",
+          "score",
+          "rank"
+        ],
+        "title": "RetrievalHit",
+        "type": "object"
+      },
+      "RetrieveRequest": {
+        "properties": {
+          "allowed_providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Providers",
+            "type": "array"
+          },
+          "cost_budget_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Usd"
+          },
+          "debug": {
+            "default": false,
+            "title": "Debug",
+            "type": "boolean"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetrievalFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "knowledge_base": {
+            "title": "Knowledge Base",
+            "type": "string"
+          },
+          "latency_budget_ms": {
+            "default": 1000,
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Budget Ms",
+            "type": "number"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "max_context_tokens": {
+            "default": 4096,
+            "maximum": 128000.0,
+            "minimum": 256.0,
+            "title": "Max Context Tokens",
+            "type": "integer"
+          },
+          "policy": {
+            "default": "auto",
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate",
+              "auto"
+            ],
+            "title": "Policy",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "knowledge_base",
+          "query"
+        ],
+        "title": "RetrieveRequest",
+        "type": "object"
+      },
+      "RetrieveResponse": {
+        "properties": {
+          "abstained": {
+            "title": "Abstained",
+            "type": "boolean"
+          },
+          "abstention_threshold": {
+            "title": "Abstention Threshold",
+            "type": "number"
+          },
+          "features": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Features",
+            "type": "object"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "policy": {
+            "title": "Policy",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "raw_top_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Top Score"
+          },
+          "route": {
+            "$ref": "#/components/schemas/RouteDecision"
+          },
+          "timings_ms": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Timings Ms",
+            "type": "object"
+          },
+          "trace_id": {
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "policy",
+          "abstained",
+          "hits",
+          "route",
+          "timings_ms",
+          "features",
+          "trace_id",
+          "abstention_threshold"
+        ],
+        "title": "RetrieveResponse",
+        "type": "object"
+      },
+      "RouteDecision": {
+        "properties": {
+          "latency_budget_ms": {
+            "title": "Latency Budget Ms",
+            "type": "number"
+          },
+          "out_of_distribution": {
+            "default": false,
+            "title": "Out Of Distribution",
+            "type": "boolean"
+          },
+          "predicted_quality": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Predicted Quality",
+            "type": "object"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_policy": {
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate",
+              "auto"
+            ],
+            "title": "Requested Policy",
+            "type": "string"
+          },
+          "router_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Router Version"
+          },
+          "selected_policy": {
+            "enum": [
+              "fast",
+              "balanced",
+              "accurate"
+            ],
+            "title": "Selected Policy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requested_policy",
+          "selected_policy",
+          "reason",
+          "latency_budget_ms"
+        ],
+        "title": "RouteDecision",
+        "type": "object"
+      },
+      "RouterPromoteRequest": {
+        "properties": {
+          "knowledge_base": {
+            "title": "Knowledge Base",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "knowledge_base"
+        ],
+        "title": "RouterPromoteRequest",
+        "type": "object"
+      },
+      "RouterTrainRequest": {
+        "properties": {
+          "benchmark_run_id": {
+            "title": "Benchmark Run Id",
+            "type": "string"
+          },
+          "knowledge_base": {
+            "title": "Knowledge Base",
+            "type": "string"
+          }
+        },
+        "required": [
+          "benchmark_run_id",
+          "knowledge_base"
+        ],
+        "title": "RouterTrainRequest",
+        "type": "object"
+      },
+      "RouterVersionRead": {
+        "properties": {
+          "artifact_checksum": {
+            "title": "Artifact Checksum",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "knowledge_base_id": {
+            "title": "Knowledge Base Id",
+            "type": "string"
+          },
+          "metrics_json": {
+            "additionalProperties": true,
+            "title": "Metrics Json",
+            "type": "object"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "knowledge_base_id",
+          "run_id",
+          "artifact_checksum",
+          "schema_version",
+          "status",
+          "created_at"
+        ],
+        "title": "RouterVersionRead",
+        "type": "object"
+      },
+      "SyncQdrantRequest": {
+        "properties": {
+          "source_collection": {
+            "title": "Source Collection",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_collection"
+        ],
+        "title": "SyncQdrantRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Evidence-Gated RAG Gateway for grounded answers, citations, traces and provider policies.",
+    "title": "ContextGate",
+    "version": "0.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/api-keys": {
+      "get": {
+        "description": "List key metadata; secret values are never persisted or returned.",
+        "operationId": "list_api_keys",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiKeyResponse"
+                  },
+                  "title": "Response List Api Keys",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Api Keys",
+        "tags": [
+          "API Keys"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_key",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Api Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/api/v1/api-keys/{key_id}": {
+      "delete": {
+        "operationId": "disable_api_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable Api Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/api/v1/api-keys/{key_id}/rotate": {
+      "post": {
+        "operationId": "rotate_api_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Api Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/api/v1/benchmarks": {
+      "post": {
+        "operationId": "benchmark",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BenchmarkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Benchmark",
+        "tags": [
+          "Evaluations"
+        ]
+      }
+    },
+    "/api/v1/evaluations": {
+      "post": {
+        "operationId": "create_evaluation",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BenchmarkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Evaluation",
+        "tags": [
+          "Evaluations"
+        ]
+      }
+    },
+    "/api/v1/evaluations/datasets": {
+      "post": {
+        "operationId": "upload_evaluation_dataset",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_evaluation_dataset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Evaluation Dataset",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Evaluation Dataset",
+        "tags": [
+          "Evaluations"
+        ]
+      }
+    },
+    "/api/v1/evaluations/{run_id}": {
+      "get": {
+        "operationId": "get_evaluation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Evaluation",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Evaluation",
+        "tags": [
+          "Evaluations"
+        ]
+      }
+    },
+    "/api/v1/evaluations/{run_id}/report": {
+      "get": {
+        "operationId": "get_evaluation_report",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Evaluation Report",
+        "tags": [
+          "Evaluations"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "Jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "Jobs"
+        ]
+      }
+    },
+    "/api/v1/knowledge-bases": {
+      "get": {
+        "description": "List knowledge bases available to retrieval and OpenAI-compatible models.",
+        "operationId": "list_knowledge_bases",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeBaseRead"
+                  },
+                  "title": "Response List Knowledge Bases",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Knowledge Bases",
+        "tags": [
+          "Knowledge Bases"
+        ]
+      },
+      "post": {
+        "operationId": "create_knowledge_base",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeBaseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeBaseRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Knowledge Base",
+        "tags": [
+          "Knowledge Bases"
+        ]
+      }
+    },
+    "/api/v1/knowledge-bases/{identifier}": {
+      "get": {
+        "description": "Get one knowledge base by UUID or slug.",
+        "operationId": "get_knowledge_base",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identifier",
+            "required": true,
+            "schema": {
+              "title": "Identifier",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeBaseRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Knowledge Base",
+        "tags": [
+          "Knowledge Bases"
+        ]
+      }
+    },
+    "/api/v1/knowledge-bases/{identifier}/documents": {
+      "get": {
+        "description": "List persisted document versions for a knowledge base.",
+        "operationId": "list_knowledge_base_documents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identifier",
+            "required": true,
+            "schema": {
+              "title": "Identifier",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentRead"
+                  },
+                  "title": "Response List Knowledge Base Documents",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Knowledge Base Documents",
+        "tags": [
+          "Knowledge Bases"
+        ]
+      },
+      "post": {
+        "operationId": "upload_document",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identifier",
+            "required": true,
+            "schema": {
+              "title": "Identifier",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Document",
+        "tags": [
+          "Ingestion"
+        ]
+      }
+    },
+    "/api/v1/knowledge-bases/{identifier}/sync-qdrant": {
+      "post": {
+        "operationId": "sync_qdrant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identifier",
+            "required": true,
+            "schema": {
+              "title": "Identifier",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncQdrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Qdrant",
+        "tags": [
+          "Ingestion"
+        ]
+      }
+    },
+    "/api/v1/policies": {
+      "get": {
+        "description": "List immutable gateway policy definitions and lifecycle status.",
+        "operationId": "list_policies",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyRead"
+                  },
+                  "title": "Response List Policies",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Policies",
+        "tags": [
+          "Policies"
+        ]
+      },
+      "post": {
+        "operationId": "create_policy",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Policy",
+        "tags": [
+          "Policies"
+        ]
+      }
+    },
+    "/api/v1/policies/{policy_id}": {
+      "get": {
+        "operationId": "get_policy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "title": "Policy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Policy",
+        "tags": [
+          "Policies"
+        ]
+      }
+    },
+    "/api/v1/policies/{policy_id}/promote": {
+      "post": {
+        "operationId": "promote_configured_policy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "title": "Policy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Configured Policy",
+        "tags": [
+          "Policies"
+        ]
+      }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "operationId": "list_providers",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Providers",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Providers",
+        "tags": [
+          "Providers"
+        ]
+      }
+    },
+    "/api/v1/providers/test": {
+      "post": {
+        "operationId": "test_provider",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Test Provider",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Provider",
+        "tags": [
+          "Providers"
+        ]
+      }
+    },
+    "/api/v1/retrieve": {
+      "post": {
+        "operationId": "retrieve",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrieveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrieveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retrieve",
+        "tags": [
+          "Retrieval"
+        ]
+      }
+    },
+    "/api/v1/routers/promote": {
+      "post": {
+        "operationId": "promote_router",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouterPromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Promote Router",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Router",
+        "tags": [
+          "Routers"
+        ]
+      }
+    },
+    "/api/v1/routers/rollback": {
+      "post": {
+        "operationId": "rollback_router",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouterPromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Rollback Router",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Router",
+        "tags": [
+          "Routers"
+        ]
+      }
+    },
+    "/api/v1/routers/train": {
+      "post": {
+        "operationId": "train_router",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouterTrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Train Router",
+        "tags": [
+          "Routers"
+        ]
+      }
+    },
+    "/api/v1/routers/{knowledge_base}/versions": {
+      "get": {
+        "description": "List router candidates and the active version for a knowledge base.",
+        "operationId": "list_router_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "knowledge_base",
+            "required": true,
+            "schema": {
+              "title": "Knowledge Base",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RouterVersionRead"
+                  },
+                  "title": "Response List Router Versions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Router Versions",
+        "tags": [
+          "Routers"
+        ]
+      }
+    },
+    "/api/v1/runs/answer": {
+      "post": {
+        "operationId": "run_answer",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Answer",
+        "tags": [
+          "Answer Runtime"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Run",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "Runs/Traces"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/cost": {
+      "get": {
+        "operationId": "get_run_cost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Run Cost",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Cost",
+        "tags": [
+          "Runs/Traces"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/events": {
+      "get": {
+        "operationId": "get_run_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after_sequence",
+            "required": false,
+            "schema": {
+              "default": -1,
+              "minimum": -1,
+              "title": "After Sequence",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "follow",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Follow",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Events",
+        "tags": [
+          "Runs/Traces"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/trace": {
+      "get": {
+        "operationId": "get_run_trace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Run Trace",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Trace",
+        "tags": [
+          "Runs/Traces"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "operationId": "chat_completions",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Chat Completions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat Completions",
+        "tags": [
+          "OpenAI Compatibility"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "operationId": "openai_models",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Openai Models",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Openai Models",
+        "tags": [
+          "OpenAI Compatibility"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Health, metrics and service-level checks.",
+      "name": "System"
+    },
+    {
+      "description": "Create and inspect knowledge-base containers.",
+      "name": "Knowledge Bases"
+    },
+    {
+      "description": "Upload documents and sync existing Qdrant collections.",
+      "name": "Ingestion"
+    },
+    {
+      "description": "Durable background job status.",
+      "name": "Jobs"
+    },
+    {
+      "description": "Run retrieval policies without answer generation.",
+      "name": "Retrieval"
+    },
+    {
+      "description": "Evidence-gated LangGraph answer runs.",
+      "name": "Answer Runtime"
+    },
+    {
+      "description": "Inspect answer traces, events and cost.",
+      "name": "Runs/Traces"
+    },
+    {
+      "description": "Run benchmarks and inspect evaluation reports.",
+      "name": "Evaluations"
+    },
+    {
+      "description": "Train and promote learned retrieval routers.",
+      "name": "Routers"
+    },
+    {
+      "description": "Persisted gateway policy configuration.",
+      "name": "Policies"
+    },
+    {
+      "description": "List and test generation providers.",
+      "name": "Providers"
+    },
+    {
+      "description": "Create, rotate and disable scoped API keys.",
+      "name": "API Keys"
+    },
+    {
+      "description": "OpenAI-compatible model and chat endpoints.",
+      "name": "OpenAI Compatibility"
+    }
+  ]
+}

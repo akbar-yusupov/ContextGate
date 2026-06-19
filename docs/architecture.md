@@ -64,14 +64,17 @@ keeps HTTP, CLI and worker contracts replaceable without changing gateway behavi
 ```mermaid
 flowchart TD
     A["Normalize request"] --> B["Query analysis"]
-    B --> C["Risk and evidence policy check"]
+    B --> C["Query risk gate"]
+    C -->|blocked| M["Blocked"]
     C --> D["Retrieval plan"]
     D --> E["Dense / sparse / late / cross retrieval"]
-    E --> F["Evidence scoring"]
+    E --> N["Context risk gate"]
+    N -->|blocked| M
+    N --> F["Answerability scoring"]
     F -->|sufficient evidence| G["Provider / model routing"]
     F -->|insufficient evidence| H["Abstention"]
     G --> I["Answer generation"]
-    I --> J["Citation and claim verification"]
+    I --> J["Exact citation and semantic claim verification"]
     H --> J
     J --> K["Final response"]
     K --> L["Trace and cost logging"]
@@ -130,17 +133,18 @@ stay compatible with Qdrant strict-mode behavior.
 
 ContextGate treats retrieved evidence as the permission boundary for generation.
 
-The evidence model computes:
+The evidence model records:
 
 - answerability score;
 - retrieval coverage score;
 - top-k support score;
-- unsupported claim candidates;
-- citation validity.
+- claim-to-citation mappings;
+- semantic support and contradiction scores;
+- verifier identity and version.
 
-If retrieval abstains or support is below threshold, the graph bypasses generation and returns a
-machine-readable abstention. If a generated answer cites a missing chunk or invalid index, the answer
-is marked ungrounded.
+If retrieval abstains, risk is blocked, budgets fail, or support is below threshold, the graph
+bypasses generation and returns an empty answer with a machine-readable decision. A draft that fails
+post-generation verification is never returned as a final answer.
 
 `AnswerWithEvidence` is the canonical application use case for native and OpenAI-compatible answer
 paths. It records the actual runtime outcome: `abstention` after evidence rejection, `extractive`
@@ -154,32 +158,35 @@ The provider registry supports:
 - LiteLLM/OpenAI-compatible provider when configured;
 - local/Ollama-style provider hooks.
 
-Policy inputs include latency budget, cost budget, maximum context tokens, allowed providers and
-fallback order. The v0.1 cost ledger stores provider, model, token/unit counts, estimated cost,
-request id and run id.
+Policy inputs include an end-to-end deadline, hard cost budget, maximum context/output tokens,
+allowed providers and fallback order. Provider selection occurs after risk and answerability gates.
+Hard budgets exclude models with unknown pricing. The ledger stores provider usage, configured
+pricing, actual/estimated cost, correlation id and server-generated run id.
 
 ## Jobs
 
 Jobs are durable records with:
 
-- `queued`, `running`, `succeeded`, `failed`, `cancelled` status values;
+- `queued`, `running`, `succeeded`, `succeeded_with_errors`, `failed`, `cancelled` status values;
 - idempotency key;
 - retry count;
 - started/finished timestamps;
 - structured error payload.
 
-Celery is isolated behind `JobQueue`. Job execution is in application use cases, while adapters hide
-SQLAlchemy sessions and the existing ingestion/benchmark/router services.
+Job and outbox records are committed together. Successful publication marks the outbox dispatched;
+startup replays pending records after broker outages. Celery task IDs equal durable job IDs, and
+payload-bound idempotency keys reject conflicting replays.
 
 ## Evaluation
 
 Benchmarks log dataset fingerprints to MLflow and write HTML reports. Query variants can share
 `group_id`, allowing group-aware train/validation splits for router training.
 
-Gateway-level evaluation tracks retrieval quality, answerability, citation validity, unsupported
-claim rate, latency, estimated cost, provider fallback rate and SLO violations. Router promotion is
-intended to require quality, latency and cost gates before MLflow aliases move from `candidate` to
-`champion`.
+Gateway evaluation tracks retrieval quality, false answers/abstentions, citation validity, claim
+support, contradictions, latency, actual cost and confidence bounds. Production defaults require a
+gateway-evaluated release set with minimum sample/language coverage before promotion. PostgreSQL is
+authoritative for the active router and stores artifact checksums; MLflow aliases and a local copy
+support deployment and rollback.
 
 ## Failure Behavior
 
@@ -187,12 +194,11 @@ intended to require quality, latency and cost gates before MLflow aliases move f
 - Latency budget below measured profile: use `fast`.
 - Retrieval score below threshold: abstain before generation.
 - LLM disabled: return extractive cited answer.
-- Redis unavailable for rate limiting: fail open for API traffic; Celery broker failures still
-  surface as job infrastructure errors.
+- Redis unavailable for rate limiting: development may fail open; Compose defaults fail closed.
 - Qdrant sync copies into a managed collection and never mutates the source collection.
 
 ## Deferred Scope
 
-v0.1 does not include multi-tenant RBAC, Kubernetes manifests, OCR, semantic cache implementation or
+v0.2 does not include multi-tenant RBAC, Kubernetes manifests, OCR, semantic cache implementation or
 a custom React UI. Interfaces exist where replacement is expected, especially job queue, providers,
 cache and router repository.

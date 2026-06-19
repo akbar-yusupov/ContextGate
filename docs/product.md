@@ -92,8 +92,8 @@ right answer/abstain decision?
 
 - It is not a chatbot UI framework.
 - It is not a CMS.
-- It does not do OCR or scanned document extraction in v0.1.
-- It does not provide multi-tenant RBAC in v0.1.
+- It does not do OCR or scanned document extraction in v0.2.
+- It does not provide multi-tenant RBAC in v0.2.
 - It is not a full prompt-injection defense platform.
 - It does not claim benchmark superiority from the included demo dataset.
 
@@ -111,6 +111,7 @@ Those questions are the product surface.
 
 ## Roadmap
 
-- `v0.1`: QA gate, citations, traces, cost records, demo dataset and QA Gate report.
-- `v0.2`: stronger provider routing, semantic cache and richer policy promotion gates.
+- `v0.1`: initial QA gate, citations, traces and demo evaluation.
+- `v0.2`: enforced admission states, claim evidence reports, real provider/cost routing, durable
+  outbox jobs, scoped keys, resumable events and confidence-bound router promotion.
 - `v0.3`: stronger claim verification, adversarial cases and security-focused hooks.

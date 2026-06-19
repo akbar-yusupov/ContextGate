@@ -28,13 +28,12 @@ invoices, support hours and data deletion.
 From the repository root:
 
 ```bash
-cp .env.example .env
-docker compose up --build -d postgres redis qdrant mlflow api
-docker compose exec api ctxgate ingest demo/documents --knowledge-base demo
+docker compose --env-file .env.example --profile demo up --build
 ```
 
-The first ingest downloads embedding models into the Docker `model-cache` volume. Later runs are
-faster.
+The `demo-init` service idempotently ingests and verifies one answered and one abstained request.
+The default `.env.example` uses deterministic local embeddings, so the demo needs no model download
+or paid provider. FastEmbed is an explicit production-quality configuration choice.
 
 Ask a grounded question:
 
@@ -81,12 +80,18 @@ Expected signal:
 ## Full Demo Command
 
 ```bash
-docker compose exec api ctxgate demo
+docker compose --profile evaluation up -d --build --wait mlflow
+docker compose exec api ctxgate demo --with-evaluation
 ```
 
 This command ingests `demo/documents`, prints one grounded answer and one abstention, runs the
 gateway-level QA evaluation over `demo/benchmark.jsonl`, trains the retrieval router and keeps
 `balanced` as fallback if promotion gates fail.
+
+Fallback is expected for this smoke dataset: it contains 150 queries while the release gate
+requires at least 200, and deterministic 64/32 embeddings prioritize reproducibility and startup
+speed over production semantic quality. The CLI prints every failed gate and warns when false
+abstentions show that the configuration is too conservative.
 
 The report path printed by the command points to an HTML report with:
 
