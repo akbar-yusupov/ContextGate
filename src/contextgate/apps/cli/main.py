@@ -27,6 +27,26 @@ def _percent(value: Any) -> str:
     return f"{float(value or 0):.1%}"
 
 
+def _running_in_container() -> bool:
+    return Path("/.dockerenv").exists()
+
+
+def _docker_version() -> str:
+    executable = shutil.which("docker")
+    if executable is None:
+        if _running_in_container():
+            return "managed by the host (Docker CLI is intentionally absent in this container)"
+        raise RuntimeError("docker executable not found")
+    result = subprocess.run(
+        [executable, "version", "--format", "{{.Server.Version}}"],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=10,
+    )
+    return result.stdout.strip()
+
+
 def _promotion_failure_messages(
     training: dict[str, Any],
     benchmark: dict[str, Any],
@@ -125,22 +145,9 @@ def doctor() -> None:
                 "required": required,
             }
 
-    def docker_check() -> str:
-        executable = shutil.which("docker")
-        if executable is None:
-            raise RuntimeError("docker executable not found")
-        result = subprocess.run(
-            [executable, "version", "--format", "{{.Server.Version}}"],
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=10,
-        )
-        return result.stdout.strip()
-
     check(
         "docker",
-        docker_check,
+        _docker_version,
         "Install Docker Desktop/Engine and ensure the daemon is running.",
         required=False,
     )

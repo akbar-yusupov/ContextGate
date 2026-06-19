@@ -1,5 +1,18 @@
-from contextgate.apps.cli.main import _promotion_failure_messages
+from pytest import MonkeyPatch
+
+from contextgate.apps.cli.main import _docker_version, _promotion_failure_messages
 from contextgate.config import Settings
+
+
+def test_docker_check_understands_host_managed_application_containers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("contextgate.apps.cli.main.shutil.which", lambda _command: None)
+    monkeypatch.setattr("contextgate.apps.cli.main._running_in_container", lambda: True)
+
+    assert _docker_version() == (
+        "managed by the host (Docker CLI is intentionally absent in this container)"
+    )
 
 
 def test_promotion_failures_are_explained_with_measured_values() -> None:
