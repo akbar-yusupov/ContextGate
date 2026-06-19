@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -97,7 +98,7 @@ class FakeRetrieval:
 
 class FakeAnswerGateway:
     def __init__(self) -> None:
-        self.calls = []
+        self.calls: list[tuple[Any, str | None]] = []
 
     def execute(self, request, *, request_id=None) -> AnswerResult:
         self.calls.append((request, request_id))
@@ -188,6 +189,7 @@ def test_gateway_evaluation_uses_answer_with_evidence(tmp_path) -> None:
     assert all(call[0].debug for call in gateway.calls)
     assert result["gateway_summary"]["overall"]["answer_rate"] == 0.5
     assert result["gateway_summary"]["overall"]["correct_abstention_rate"] == 1.0
+    assert result["metadata"]["query_count"] == 2
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "QA Gate Summary" in report
     payload = json.loads(Path(result["results_path"]).read_text(encoding="utf-8"))

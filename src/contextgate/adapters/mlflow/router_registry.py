@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import re
 import shutil
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +40,11 @@ FEATURE_NAMES = (
 _PREDICT_EXECUTOR = ThreadPoolExecutor(max_workers=len(FIXED_POLICIES))
 
 
+def _registry_version(value: str | int) -> Any:
+    """Bridge MLflow 3.13's string API annotation and integer SQL schema."""
+    return int(value)
+
+
 def _predict_one(
     item: tuple[HistGradientBoostingRegressor, np.ndarray],
 ) -> float:
@@ -67,6 +76,7 @@ class RouterBundle:
     quality_tolerance: float = 0.02
     eligible_for_promotion: bool = False
     validation_metrics: dict[str, float] | None = None
+    promotion_failures: tuple[str, ...] = ()
 
     def choose_policy(
         self,
@@ -127,12 +137,25 @@ class RouterBundle:
 
 
 class RouterManager:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        active_path_resolver: Callable[[str], Path | tuple[Path, str] | None] | None = None,
+    ) -> None:
         self.settings = settings or get_settings()
+        self.active_path_resolver = active_path_resolver
         self._cache: dict[str, tuple[float, RouterBundle]] = {}
 
+    def _registry_client(self) -> MlflowClient:
+        # MLflow 3.13 REST serializes model versions as strings while its PostgreSQL
+        # registry schema stores integers. Use the configured registry store directly.
+        return MlflowClient(
+            tracking_uri=self.settings.resolved_mlflow_tracking_uri,
+            registry_uri=self.settings.resolved_mlflow_registry_store_uri,
+        )
+
     def _active_path(self, knowledge_base: str) -> Path:
-        return self.settings.router_dir / knowledge_base / "active.skops"
+        return self.settings.router_dir / _safe_segment(knowledge_base) / "active.skops"
 
     @staticmethod
     def _load_bundle(path: Path) -> RouterBundle:
@@ -157,9 +180,20 @@ class RouterManager:
         skops_io.dump(bundle, path)
 
     def load(self, knowledge_base: str) -> RouterBundle | None:
-        path = self._active_path(knowledge_base)
+        resolved = (
+            self.active_path_resolver(knowledge_base)
+            if self.active_path_resolver is not None
+            else self._active_path(knowledge_base)
+        )
+        if resolved is None:
+            return None
+        path, expected_checksum = resolved if isinstance(resolved, tuple) else (resolved, "")
         if not path.exists():
             return None
+        if expected_checksum:
+            actual_checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            if actual_checksum != expected_checksum:
+                raise ValueError("Active router artifact checksum mismatch")
         modified = path.stat().st_mtime
         cached = self._cache.get(knowledge_base)
         if cached and cached[0] == modified:
@@ -197,6 +231,8 @@ class RouterManager:
         return bundle.decide(features, latency_budget_ms)
 
     def train(self, benchmark_run_id: str, knowledge_base: str) -> dict[str, Any]:
+        benchmark_run_id = _safe_segment(benchmark_run_id)
+        knowledge_base = _safe_segment(knowledge_base)
         results_path = self.settings.report_dir / benchmark_run_id / "results.json"
         if not results_path.exists():
             raise ValueError(f"Benchmark results not found: {benchmark_run_id}")
@@ -312,7 +348,12 @@ class RouterManager:
         latency_reduction = 1 - auto_latency_p95 / max(accurate_latency_p95, 1e-9)
         router_regret = best_fixed_quality - auto_ndcg
         slo_violation_rate = float(np.mean(np.asarray(auto_latency) > validation_slo_ms))
-        eligible = quality_ratio >= 0.95 and latency_reduction >= 0.15
+        promotion_failures = self._gateway_promotion_failures(payload, rows)
+        if quality_ratio < 0.95:
+            promotion_failures.append("router_quality_ratio_below_threshold")
+        if latency_reduction < 0.15:
+            promotion_failures.append("router_latency_reduction_below_threshold")
+        eligible = not promotion_failures
         validation_metrics = {
             "auto_ndcg_at_10": auto_ndcg,
             "best_fixed_ndcg_at_10": best_fixed_quality,
@@ -359,6 +400,7 @@ class RouterManager:
             abstention_thresholds=thresholds,
             eligible_for_promotion=eligible,
             validation_metrics=validation_metrics,
+            promotion_failures=tuple(promotion_failures),
         )
         candidate_dir = self.settings.router_dir / knowledge_base / benchmark_run_id
         candidate_dir.mkdir(parents=True, exist_ok=True)
@@ -390,7 +432,7 @@ class RouterManager:
             )
             registry_manifest: dict[str, dict[str, str]] = {}
             if self.settings.environment != "test":
-                client = MlflowClient()
+                client = self._registry_client()
                 for model_policy, model in models.items():
                     model_name = f"contextgate-{knowledge_base}-{model_policy}-quality"
                     mlflow.sklearn.log_model(
@@ -407,20 +449,21 @@ class RouterManager:
                     if not versions:
                         raise RuntimeError(f"MLflow did not register model {model_name}")
                     model_version = max(versions, key=lambda item: int(item.version))
+                    model_version_number = _registry_version(model_version.version)
                     client.set_registered_model_alias(
                         model_name,
                         "candidate",
-                        model_version.version,
+                        model_version_number,
                     )
                     client.set_model_version_tag(
                         model_name,
-                        model_version.version,
+                        model_version_number,
                         "benchmark_run_id",
                         benchmark_run_id,
                     )
                     registry_manifest[model_policy] = {
                         "name": model_name,
-                        "version": model_version.version,
+                        "version": str(model_version_number),
                     }
                 manifest_path = candidate_dir / "mlflow_registry.json"
                 manifest_path.write_text(
@@ -436,9 +479,65 @@ class RouterManager:
             "artifact_path": str(artifact_path),
             "metrics": metrics,
             "eligible_for_promotion": eligible,
+            "promotion_failures": promotion_failures,
+            "promotion_thresholds": {
+                "quality_ratio_min": 0.95,
+                "latency_reduction_min": 0.15,
+            },
         }
 
+    def _gateway_promotion_failures(
+        self, payload: dict[str, Any], rows: list[dict[str, Any]]
+    ) -> list[str]:
+        failures: list[str] = []
+        gateway = payload.get("gateway_evaluation")
+        if not gateway:
+            return ["gateway_answer_evaluation_required"]
+        cases = gateway.get("cases", [])
+        if len(rows) < self.settings.router_min_release_cases:
+            failures.append("insufficient_release_cases")
+        unanswerable_rows = sum(1 for row in rows if not row.get("answerable", True))
+        if unanswerable_rows < self.settings.router_min_unanswerable_cases:
+            failures.append("insufficient_unanswerable_cases")
+        required_languages = {
+            value.strip()
+            for value in self.settings.router_required_languages.split(",")
+            if value.strip()
+        }
+        for language in sorted(required_languages):
+            if (
+                sum(1 for row in rows if row.get("language") == language)
+                < self.settings.router_min_cases_per_language
+            ):
+                failures.append(f"insufficient_language_cases:{language}")
+
+        total_unanswerable = sum(1 for case in cases if not case.get("answerable", True))
+        false_answers = sum(1 for case in cases if case.get("failure_type") == "false_answer")
+        false_answer_upper = _wilson_bound(false_answers, total_unanswerable, upper=True)
+        answered = [case for case in cases if case.get("answered")]
+        citation_passes = sum(float(case.get("citation_validity", 0)) >= 1 for case in answered)
+        supported = sum(
+            case.get("unsupported_claim_count", 0) == 0 and case.get("grounded", False)
+            for case in answered
+        )
+        citation_lower = _wilson_bound(citation_passes, len(answered), upper=False)
+        claim_support_lower = _wilson_bound(supported, len(answered), upper=False)
+        if false_answer_upper > self.settings.router_max_false_answer_upper_95:
+            failures.append("false_answer_confidence_gate_failed")
+        if citation_lower < self.settings.router_min_citation_lower_95:
+            failures.append("citation_confidence_gate_failed")
+        if claim_support_lower < self.settings.router_min_claim_support_lower_95:
+            failures.append("claim_support_confidence_gate_failed")
+        if any(
+            case.get("failure_type") == "false_answer" and "adversarial" in case.get("tags", [])
+            for case in cases
+        ):
+            failures.append("critical_adversarial_false_answer")
+        return failures
+
     def promote(self, benchmark_run_id: str, knowledge_base: str) -> Path:
+        benchmark_run_id = _safe_segment(benchmark_run_id)
+        knowledge_base = _safe_segment(knowledge_base)
         candidate_dir = self.settings.router_dir / knowledge_base / benchmark_run_id
         source = candidate_dir / "router.skops"
         if not source.exists():
@@ -450,16 +549,17 @@ class RouterManager:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             mlflow.set_tracking_uri(self.settings.resolved_mlflow_tracking_uri)
-            client = MlflowClient()
+            client = self._registry_client()
             for model in manifest.values():
+                model_version_number = _registry_version(model["version"])
                 client.set_registered_model_alias(
                     model["name"],
                     "champion",
-                    model["version"],
+                    model_version_number,
                 )
                 client.set_model_version_tag(
                     model["name"],
-                    model["version"],
+                    model_version_number,
                     "deployment_status",
                     "champion",
                 )
@@ -507,3 +607,20 @@ def calibrate_abstention_threshold(
             -threshold,
         ),
     )
+
+
+def _wilson_bound(successes: int, total: int, *, upper: bool) -> float:
+    if total == 0:
+        return 1.0 if upper else 0.0
+    z = 1.959963984540054
+    rate = successes / total
+    denominator = 1 + z * z / total
+    center = (rate + z * z / (2 * total)) / denominator
+    margin = z * math.sqrt((rate * (1 - rate) + z * z / (4 * total)) / total) / denominator
+    return min(1.0, center + margin) if upper else max(0.0, center - margin)
+
+
+def _safe_segment(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value) or value in {".", ".."}:
+        raise ValueError("Identifier contains unsafe path characters")
+    return value

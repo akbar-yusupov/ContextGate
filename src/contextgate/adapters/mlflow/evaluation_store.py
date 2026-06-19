@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import platform
 import re
 import subprocess
 import time
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean
@@ -13,7 +15,7 @@ from typing import Any, Protocol
 
 import mlflow
 import pandas as pd
-from mlflow.data import from_pandas  # type: ignore[attr-defined]
+from mlflow.data import from_pandas
 from sqlalchemy.orm import Session
 
 from contextgate.adapters.mlflow.reporting import write_html_report
@@ -131,6 +133,17 @@ def _rate(numerator: int | float, denominator: int | float) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
+def _wilson_bound(successes: int, total: int, *, upper: bool) -> float:
+    if total == 0:
+        return 1.0 if upper else 0.0
+    z = 1.959963984540054
+    rate = successes / total
+    denominator = 1 + z * z / total
+    center = (rate + z * z / (2 * total)) / denominator
+    margin = z * math.sqrt((rate * (1 - rate) + z * z / (4 * total)) / total) / denominator
+    return min(1.0, center + margin) if upper else max(0.0, center - margin)
+
+
 def summarize_gateway_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     def summarize(items: list[dict[str, Any]]) -> dict[str, float]:
         total = len(items)
@@ -140,6 +153,14 @@ def summarize_gateway_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         abstained = [item for item in items if item["abstained"]]
         grounded_answers = [item for item in answered if item["grounded"]]
         unsupported_claim_cases = [item for item in items if item["unsupported_claim_count"] > 0]
+        contradiction_cases = [
+            item for item in items if item.get("contradiction_claim_count", 0) > 0
+        ]
+        supported_answers = [
+            item for item in answered if item["unsupported_claim_count"] == 0 and item["grounded"]
+        ]
+        false_answers = sum(1 for item in unanswerable if item["failure_type"] == "false_answer")
+        valid_citations = sum(float(item["citation_validity"]) >= 1 for item in answered)
         return {
             "case_count": float(total),
             "answer_rate": _rate(len(answered), total),
@@ -161,6 +182,15 @@ def summarize_gateway_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
             if items
             else 0.0,
             "unsupported_claim_case_count": float(len(unsupported_claim_cases)),
+            "contradiction_case_count": float(len(contradiction_cases)),
+            "claim_support_rate": _rate(len(supported_answers), len(answered)),
+            "false_answer_upper_95": _wilson_bound(false_answers, len(unanswerable), upper=True),
+            "citation_validity_lower_95": _wilson_bound(
+                valid_citations, len(answered), upper=False
+            ),
+            "claim_support_lower_95": _wilson_bound(
+                len(supported_answers), len(answered), upper=False
+            ),
             "latency_p50_ms": percentile([float(item["latency_ms"]) for item in items], 0.50),
             "latency_p95_ms": percentile([float(item["latency_ms"]) for item in items], 0.95),
             "estimated_cost_per_answer": _rate(
@@ -204,12 +234,19 @@ class BenchmarkService:
         mlflow.set_experiment("contextgate-benchmarks")
         dataset_digest = _sha256(dataset_path)
         with mlflow.start_run(run_name=f"{knowledge_base}-{dataset_path.stem}") as run:
-            dataset = from_pandas(
-                pd.DataFrame([query.to_dict() for query in queries]),
-                source=str(dataset_path.resolve()),
-                name=dataset_path.stem,
-                digest=dataset_digest[:36],
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="The specified dataset source can be interpreted in multiple ways.*",
+                    category=UserWarning,
+                    module="mlflow.data.dataset_source_registry",
+                )
+                dataset = from_pandas(
+                    pd.DataFrame([query.to_dict() for query in queries]),
+                    source=str(dataset_path.resolve()),
+                    name=dataset_path.stem,
+                    digest=dataset_digest[:36],
+                )
             mlflow.log_input(dataset, context="retrieval-evaluation")
             run_id = run.info.run_id
             output_dir = self.settings.report_dir / run_id
@@ -280,6 +317,17 @@ class BenchmarkService:
                         "abstention_threshold": response.abstention_threshold,
                     }
                     if gateway_answer is not None:
+                        report_claims = (
+                            list(gateway_answer.evidence_report.claims)
+                            if gateway_answer.evidence_report
+                            else []
+                        )
+                        unsupported_claims = [
+                            claim.claim for claim in report_claims if claim.status != "supported"
+                        ] or gateway_answer.unsupported_claims
+                        contradiction_claim_count = sum(
+                            claim.contradiction_score >= 0.5 for claim in report_claims
+                        )
                         expected = " ".join(query.expected_facts)
                         fact_coverage = _token_recall(expected, gateway_answer.answer)
                         faithfulness = _lexical_faithfulness(
@@ -329,8 +377,17 @@ class BenchmarkService:
                                 "citation_source_ids": [
                                     citation.chunk_id for citation in gateway_answer.citations
                                 ],
-                                "unsupported_claim_count": len(gateway_answer.unsupported_claims),
-                                "unsupported_claims": gateway_answer.unsupported_claims,
+                                "unsupported_claim_count": len(unsupported_claims),
+                                "unsupported_claims": unsupported_claims,
+                                "contradiction_claim_count": contradiction_claim_count,
+                                "citation_repair_attempted": bool(
+                                    gateway_answer.evidence_report
+                                    and gateway_answer.evidence_report.repair_attempted
+                                ),
+                                "citation_repair_succeeded": bool(
+                                    gateway_answer.evidence_report
+                                    and gateway_answer.evidence_report.repair_succeeded
+                                ),
                                 "expected_facts": query.expected_facts,
                                 "fact_coverage": fact_coverage,
                                 "faithfulness": faithfulness,
@@ -471,4 +528,5 @@ class BenchmarkService:
                 if gateway_evaluation is not None
                 else None,
                 "by_language": payload["by_language"],
+                "metadata": payload["metadata"],
             }

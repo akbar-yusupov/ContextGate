@@ -2,12 +2,46 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from contextgate.adapters.mlflow.router_registry import (
     RouterManager,
+    _registry_version,
     calibrate_abstention_threshold,
 )
 from contextgate.config import Settings
+
+
+def test_registry_client_uses_dedicated_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeClient:
+        def __init__(self, *, tracking_uri: str, registry_uri: str) -> None:
+            captured["tracking_uri"] = tracking_uri
+            captured["registry_uri"] = registry_uri
+
+    monkeypatch.setattr(
+        "contextgate.adapters.mlflow.router_registry.MlflowClient",
+        FakeClient,
+    )
+    settings = Settings(
+        environment="test",
+        mlflow_tracking_uri="http://mlflow:5000",
+        mlflow_registry_store_uri="postgresql+psycopg://user:pass@postgres:5432/mlflow",
+        report_dir=tmp_path / "reports",
+        router_dir=tmp_path / "routers",
+    )
+
+    client = RouterManager(settings)._registry_client()
+
+    assert isinstance(client, FakeClient)
+    assert captured == {
+        "tracking_uri": "http://mlflow:5000",
+        "registry_uri": "postgresql+psycopg://user:pass@postgres:5432/mlflow",
+    }
+    assert _registry_version("2") == 2
 
 
 def _features(index: int) -> dict:
@@ -30,6 +64,12 @@ def test_router_train_promote_and_select(tmp_path: Path) -> None:
         report_dir=tmp_path / "reports",
         router_dir=tmp_path / "routers",
         mlflow_tracking_uri=str(tmp_path / "mlruns"),
+        router_min_release_cases=0,
+        router_min_unanswerable_cases=0,
+        router_required_languages="",
+        router_max_false_answer_upper_95=1,
+        router_min_citation_lower_95=0,
+        router_min_claim_support_lower_95=0,
     )
     settings.prepare_directories()
     benchmark_id = "benchmark-1"
@@ -70,6 +110,7 @@ def test_router_train_promote_and_select(tmp_path: Path) -> None:
             "balanced": {"latency_p95_ms": 150},
             "accurate": {"latency_p95_ms": 400},
         },
+        "gateway_evaluation": {"cases": [], "summary": {"overall": {}, "by_policy": {}}},
     }
     (result_dir / "results.json").write_text(json.dumps(payload), encoding="utf-8")
     manager = RouterManager(settings)
