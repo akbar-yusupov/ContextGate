@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 from contextgate.application.dto import AnswerCommand
@@ -63,6 +65,12 @@ class RecordingProviderRegistry:
         self.calls += 1
         return "openai/gpt-4o-mini"
 
+    def list(self) -> list[dict[str, Any]]:
+        return []
+
+    def test(self, provider: str | None = None) -> dict[str, Any]:
+        return {"provider": provider, "available": True}
+
 
 class RecordingCostLedger:
     def __init__(self) -> None:
@@ -78,6 +86,17 @@ class RecordingCostLedger:
 class RecordingTraceStore:
     def __init__(self) -> None:
         self.events: list[tuple[str, str, dict[str, Any]]] = []
+        self.started: list[tuple[str, str]] = []
+
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        correlation_id: str,
+        knowledge_base: str,
+        query: str,
+    ) -> None:
+        self.started.append((run_id, correlation_id))
 
     def append_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> None:
         self.events.append((run_id, event_type, payload))
@@ -87,6 +106,42 @@ class RecordingTraceStore:
 
     def get_trace(self, run_id: str) -> dict[str, Any]:
         return {"run_id": run_id, "events": []}
+
+    def purge_older_than(self, days: int) -> int:
+        return 0
+
+
+class FakeUnitOfWork:
+    raw_session: Any = None
+
+    def __enter__(self) -> FakeUnitOfWork:
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        return None
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
+
+    def create_job(self, **_: Any) -> tuple[Any, bool]:
+        raise NotImplementedError
+
+    def promote_router_version(self, run_id: str, knowledge_base: str) -> None:
+        raise NotImplementedError
+
+    def mark_job_enqueued(self, job_id: str) -> None:
+        raise NotImplementedError
+
+    def pending_job_dispatches(self) -> list[tuple[str, str]]:
+        return []
+
+
+class FakeUnitOfWorkFactory:
+    def __call__(self) -> FakeUnitOfWork:
+        return FakeUnitOfWork()
 
 
 class DictCache:
@@ -107,7 +162,7 @@ def _use_case(
     cost_ledger = RecordingCostLedger()
     use_case = AnswerWithEvidence(
         FakeGraph(result),
-        object(),  # unused by the answer path
+        FakeUnitOfWorkFactory(),
         provider_registry,
         cost_ledger,
         RecordingTraceStore(),
@@ -161,7 +216,87 @@ def test_answer_use_case_surfaces_unsupported_claims() -> None:
     assert "teleport" not in response.answer
     assert response.provider == "abstention"
     assert response.selected_provider == "abstention"
-    assert response.abstention_reason == AbstentionReason.LOW_COVERAGE
+    assert response.abstention_reason == AbstentionReason.INVALID_CITATIONS
     assert response.grounded is False
     assert provider_registry.calls == 0
     assert cost_ledger.records[0].provider == "abstention"
+
+
+def test_client_correlation_id_never_becomes_the_run_primary_key() -> None:
+    result = AnswerResult(
+        answer="",
+        citations=[],
+        retrieval=_retrieval(abstained=True),
+        provider="abstention",
+        grounded=False,
+        abstention_reason=AbstentionReason.RETRIEVAL_EMPTY,
+    )
+    use_case, _, _ = _use_case(result)
+
+    first = use_case.execute(
+        AnswerCommand(knowledge_base="demo", query="unknown"), request_id="client-id"
+    )
+    second = use_case.execute(
+        AnswerCommand(knowledge_base="demo", query="unknown"), request_id="client-id"
+    )
+
+    assert first.run_id != "client-id"
+    assert second.run_id != "client-id"
+    assert first.run_id != second.run_id
+
+
+def test_promoted_policy_is_applied_as_an_immutable_run_snapshot() -> None:
+    result = AnswerResult(
+        answer="",
+        citations=[],
+        retrieval=_retrieval(abstained=True),
+        provider="abstention",
+        grounded=False,
+        abstention_reason=AbstentionReason.RETRIEVAL_EMPTY,
+    )
+
+    class CapturingGraph(FakeGraph):
+        request: AnswerCommand | None = None
+
+        def answer(self, request: AnswerCommand) -> AnswerResult:
+            self.request = request
+            return self.result
+
+    class PolicyRepository:
+        def resolve_active(self, policy_id: str):
+            assert policy_id == "policy-1"
+            return SimpleNamespace(
+                id="policy-1",
+                name="strict",
+                status="active",
+                retrieval_policy="accurate",
+                provider_policy="extractive",
+                latency_budget_ms=750,
+                cost_budget_usd=0.0,
+                promoted_at=datetime.now(UTC),
+            )
+
+    graph = CapturingGraph(result)
+    use_case = AnswerWithEvidence(
+        graph,
+        FakeUnitOfWorkFactory(),
+        RecordingProviderRegistry(),
+        RecordingCostLedger(),
+        RecordingTraceStore(),
+        DictCache(),
+        PolicyRepository(),
+    )
+
+    response = use_case.execute(
+        AnswerCommand(
+            knowledge_base="demo",
+            query="unknown",
+            gateway_policy_id="policy-1",
+        )
+    )
+
+    assert graph.request is not None
+    assert graph.request.policy == "accurate"
+    assert graph.request.llm_provider == "extractive"
+    assert graph.request.latency_budget_ms == 750
+    assert response.policy_snapshot["id"] == "policy-1"

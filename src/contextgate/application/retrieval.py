@@ -17,6 +17,7 @@ from contextgate.domain.retrieval import (
     RetrievalResult,
     RouteDecision,
 )
+from contextgate.observability.metrics import RETRIEVAL_LATENCY, ROUTE_DECISIONS
 from contextgate.ports.repositories import KnowledgeBaseRepository
 from contextgate.ports.router import RouterRepository
 from contextgate.ports.vector_index import VectorIndex
@@ -116,6 +117,7 @@ class RetrievalService:
             "query_token_count": len(request.query.split()),
             "language": language,
             "first_stage_latency_ms": 0.0,
+            "corpus_version": getattr(kb, "corpus_version", 0),
         }
         if request.policy == "auto":
             probe = self.probe(
@@ -125,6 +127,7 @@ class RetrievalService:
                 limit=max(20, request.limit),
             )
             features = probe.features
+            features["corpus_version"] = getattr(kb, "corpus_version", 0)
             route = self.router.decide(
                 kb.slug,
                 features,
@@ -158,6 +161,8 @@ class RetrievalService:
             )
         retrieval_ms = (perf_counter() - retrieval_started) * 1000
         total_ms = (perf_counter() - overall_started) * 1000
+        RETRIEVAL_LATENCY.labels(policy=selected).observe(total_ms / 1000)
+        ROUTE_DECISIONS.labels(policy=selected, reason=route.reason).inc()
         raw_top_score = hits[0].score if hits else None
         threshold = self.router.abstention_threshold(
             kb.slug,

@@ -31,8 +31,11 @@ class RetrieveCommand:
 
 @dataclass(slots=True, frozen=True)
 class AnswerCommand(RetrieveCommand):
+    gateway_policy_id: str | None = None
     system_prompt: str | None = None
     llm_provider: str | None = None
+    stream_mode: str = "none"
+    deadline_monotonic: float | None = None
 
 
 @dataclass(slots=True, frozen=True)

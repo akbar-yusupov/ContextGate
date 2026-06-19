@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -42,6 +43,12 @@ class FixedPolicyVectorIndex:
 
 
 class FakeRouter:
+    def train(self, benchmark_run_id: str, knowledge_base: str) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def promote(self, benchmark_run_id: str, knowledge_base: str) -> Path:
+        raise NotImplementedError
+
     def decide(
         self,
         knowledge_base: str,
@@ -61,8 +68,17 @@ class FakeRouter:
 
 
 class FakeKnowledgeBases:
+    def create(self, payload: Any) -> SimpleNamespace:
+        raise NotImplementedError
+
+    def list(self) -> list[Any]:
+        return []
+
     def get(self, identifier: str) -> SimpleNamespace:
         return SimpleNamespace(slug=identifier, collection_name=identifier)
+
+    def get_job(self, job_id: str) -> SimpleNamespace:
+        raise NotImplementedError
 
 
 def test_explicit_policy_skips_router_probe() -> None:

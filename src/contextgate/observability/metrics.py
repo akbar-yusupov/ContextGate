@@ -22,6 +22,31 @@ ROUTE_DECISIONS = Counter(
     "Adaptive route decisions.",
     ["policy", "reason"],
 )
+GATE_DECISIONS = Counter(
+    "contextgate_gate_decisions_total",
+    "Final answer admission decisions.",
+    ["status", "reason", "retrieval_policy", "provider"],
+)
+PROVIDER_LATENCY = Histogram(
+    "contextgate_provider_duration_seconds",
+    "Generation provider latency.",
+    ["provider"],
+)
+PROVIDER_FAILURES = Counter(
+    "contextgate_provider_failures_total",
+    "Generation provider failures.",
+    ["provider", "error_type"],
+)
+PROVIDER_CIRCUIT_OPENINGS = Counter(
+    "contextgate_provider_circuit_openings_total",
+    "Generation provider circuit breaker openings.",
+    ["provider"],
+)
+ESTIMATED_COST = Histogram(
+    "contextgate_request_cost_usd",
+    "Recorded request cost in USD.",
+    ["provider"],
+)
 INGESTED_CHUNKS = Counter(
     "contextgate_ingested_chunks_total",
     "Chunks successfully written to the vector store.",
