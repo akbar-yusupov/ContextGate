@@ -1,0 +1,8 @@
+---
+description: ContextGate architecture, admission, security, and verification rules
+alwaysApply: true
+---
+
+Read `AGENTS.md` before changing this repository. It is the canonical contract. Preserve admission
+status behavior, exact citation mapping, fail-closed verification/budgets, inward dependencies,
+managed upload paths, migration history, hermetic tests, and synchronized public documentation.

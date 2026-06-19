@@ -1,0 +1,26 @@
+# ContextGate
+
+> Production-oriented, single-tenant evidence-gated RAG gateway.
+
+## Start Here
+
+- [Project README](README.md)
+- [Documentation index](docs/index.md)
+- [Getting started](docs/getting-started.md)
+- [Product contract](docs/product.md)
+- [Architecture](docs/architecture.md)
+- [API reference](docs/api.md)
+- [Entities](docs/entities.md)
+- [Repository map](docs/repository-map.md)
+- [AI integration](docs/ai-integration.md)
+- [Advantages and limitations](docs/limitations.md)
+- [Deployment](docs/deployment.md)
+- [Security](SECURITY.md)
+
+## Coding Agents
+
+- [Canonical agent instructions](AGENTS.md)
+- [Contributing](CONTRIBUTING.md)
+
+Do not infer production benchmark claims from the synthetic demo. Read `status` before answer text;
+abstained and blocked results intentionally contain no answer.
