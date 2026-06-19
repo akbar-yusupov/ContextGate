@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import sessionmaker
 
 from contextgate.adapters.sqlalchemy import CostRecordModel, GatewayRun, RunEvent
@@ -66,38 +67,78 @@ class SqlAlchemyTraceStore:
     def __init__(self, session_factory: sessionmaker) -> None:
         self.session_factory = session_factory
 
-    def append_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        correlation_id: str,
+        knowledge_base: str,
+        query: str,
+    ) -> None:
         with self.session_factory() as session:
+            if session.get(GatewayRun, run_id) is not None:
+                raise ValueError(f"Gateway run already exists: {run_id}")
+            session.add(
+                GatewayRun(
+                    id=run_id,
+                    correlation_id=correlation_id[:128],
+                    status="running",
+                    trace_id=run_id,
+                    knowledge_base=knowledge_base,
+                    query=query,
+                    selected_retrieval_policy="",
+                    selected_provider="",
+                    abstained=False,
+                )
+            )
+            session.commit()
+
+    def append_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> None:
+        self.append_events(run_id, [(event_type, payload)])
+
+    def append_events(
+        self,
+        run_id: str,
+        events: list[tuple[str, dict[str, Any]]],
+    ) -> None:
+        if not events:
+            return
+        with self.session_factory() as session:
+            run = session.scalar(
+                select(GatewayRun).where(GatewayRun.id == run_id).with_for_update()
+            )
+            if run is None:
+                raise ValueError(f"Gateway run was not started: {run_id}")
             last_sequence = session.scalar(
                 select(func.max(RunEvent.sequence)).where(RunEvent.run_id == run_id)
             )
-            session.add(
-                RunEvent(
-                    run_id=run_id,
-                    sequence=0 if last_sequence is None else last_sequence + 1,
-                    event_type=event_type,
-                    payload=payload,
-                )
-            )
-            if event_type == "final":
-                existing = session.get(GatewayRun, run_id)
-                if existing is None:
-                    session.add(
-                        GatewayRun(
-                            id=run_id,
-                            trace_id=str(payload.get("trace_id", run_id)),
-                            knowledge_base=str(payload.get("knowledge_base", "")),
-                            query=str(payload.get("query", "")),
-                            selected_retrieval_policy=str(payload.get("retrieval_policy", "")),
-                            selected_provider=str(payload.get("provider", "")),
-                            evidence_score=float(payload.get("evidence_score", 0)),
-                            answerability_score=float(payload.get("answerability_score", 0)),
-                            coverage_score=float(payload.get("coverage_score", 0)),
-                            support_score=float(payload.get("support_score", 0)),
-                            abstained=bool(payload.get("abstained", False)),
-                            metadata_json=payload,
-                        )
+            next_sequence = 0 if last_sequence is None else last_sequence + 1
+            session.add_all(
+                [
+                    RunEvent(
+                        run_id=run_id,
+                        sequence=next_sequence + offset,
+                        event_type=event_type,
+                        payload=payload,
                     )
+                    for offset, (event_type, payload) in enumerate(events)
+                ]
+            )
+            final_payload = next(
+                (payload for event_type, payload in reversed(events) if event_type == "final"),
+                None,
+            )
+            if final_payload is not None:
+                run.trace_id = str(final_payload.get("trace_id", run_id))
+                run.status = str(final_payload.get("status", "abstained"))
+                run.selected_retrieval_policy = str(final_payload.get("retrieval_policy", ""))
+                run.selected_provider = str(final_payload.get("provider", ""))
+                run.evidence_score = float(final_payload.get("evidence_score", 0))
+                run.answerability_score = float(final_payload.get("answerability_score", 0))
+                run.coverage_score = float(final_payload.get("coverage_score", 0))
+                run.support_score = float(final_payload.get("support_score", 0))
+                run.abstained = bool(final_payload.get("abstained", False))
+                run.metadata_json = final_payload
             session.commit()
 
     def list_events(self, run_id: str) -> list[dict[str, Any]]:
@@ -128,6 +169,8 @@ class SqlAlchemyTraceStore:
             if run is None
             else {
                 "trace_id": run.trace_id,
+                "correlation_id": run.correlation_id,
+                "status": run.status,
                 "knowledge_base": run.knowledge_base,
                 "query": run.query,
                 "selected_retrieval_policy": run.selected_retrieval_policy,
@@ -138,6 +181,13 @@ class SqlAlchemyTraceStore:
             },
             "events": self.list_events(run_id),
         }
+
+    def purge_older_than(self, days: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=max(days, 1))
+        with self.session_factory() as session:
+            result = session.execute(delete(GatewayRun).where(GatewayRun.created_at < cutoff))
+            session.commit()
+            return int(result.rowcount or 0)
 
 
 class InMemoryResponseCache:

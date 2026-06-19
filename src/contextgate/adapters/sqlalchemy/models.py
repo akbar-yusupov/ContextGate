@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -30,6 +31,7 @@ class KnowledgeBase(Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     description: Mapped[str] = mapped_column(Text, default="")
     collection_name: Mapped[str] = mapped_column(String(128), unique=True)
+    corpus_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -37,9 +39,20 @@ class KnowledgeBase(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint(
+            "knowledge_base_id",
+            "external_id",
+            "content_hash",
+            "pipeline_version",
+            name="uq_document_version",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    knowledge_base_id: Mapped[str] = mapped_column(String(36), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
     source: Mapped[str] = mapped_column(String(512))
     external_id: Mapped[str] = mapped_column(String(256), index=True)
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
@@ -90,9 +103,13 @@ class RouterVersion(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    knowledge_base_id: Mapped[str] = mapped_column(String(36), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
     run_id: Mapped[str] = mapped_column(String(128), index=True)
     artifact_path: Mapped[str] = mapped_column(String(1024))
+    artifact_checksum: Mapped[str] = mapped_column(String(64), default="")
+    schema_version: Mapped[str] = mapped_column(String(32), default="v1")
     status: Mapped[str] = mapped_column(String(32), default="candidate")
     metrics_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(
@@ -100,10 +117,26 @@ class RouterVersion(Base):
     )
 
 
+class JobOutbox(Base):
+    __tablename__ = "job_outbox"
+    __table_args__ = (Index("ix_job_outbox_job_id", "job_id", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    job_id: Mapped[str] = mapped_column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class GatewayRun(Base):
     __tablename__ = "gateway_runs"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    correlation_id: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="running", index=True)
     trace_id: Mapped[str] = mapped_column(String(128), index=True)
     knowledge_base: Mapped[str] = mapped_column(String(128), index=True)
     query: Mapped[str] = mapped_column(Text)
@@ -128,7 +161,9 @@ class RunEvent(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    run_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("gateway_runs.id", ondelete="CASCADE"), index=True
+    )
     sequence: Mapped[int] = mapped_column(Integer, default=0)
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -150,8 +185,10 @@ class CostRecordModel(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    request_id: Mapped[str] = mapped_column(String(64), index=True)
-    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    request_id: Mapped[str] = mapped_column(String(128), index=True)
+    run_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("gateway_runs.id", ondelete="CASCADE"), index=True
+    )
     provider: Mapped[str] = mapped_column(String(128))
     model: Mapped[str] = mapped_column(String(128))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -171,6 +208,8 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(120), unique=True)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    scopes_json: Mapped[list[str]] = mapped_column(JSON, default=lambda: ["read", "write", "admin"])
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

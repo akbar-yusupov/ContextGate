@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -72,15 +73,24 @@ class RouterTrainingServiceJobRunner:
                 )
             )
             if version is None:
+                artifact_checksum = hashlib.sha256(
+                    Path(result["artifact_path"]).read_bytes()
+                ).hexdigest()
                 version = RouterVersion(
                     knowledge_base_id=knowledge_base.id,
                     run_id=result["run_id"],
                     artifact_path=result["artifact_path"],
+                    artifact_checksum=artifact_checksum,
+                    schema_version="v1",
                     status="candidate",
                     metrics_json=result["metrics"],
                 )
             else:
                 version.artifact_path = result["artifact_path"]
+                version.artifact_checksum = hashlib.sha256(
+                    Path(result["artifact_path"]).read_bytes()
+                ).hexdigest()
+                version.schema_version = "v1"
                 version.status = "candidate"
                 version.metrics_json = result["metrics"]
             session.add(version)

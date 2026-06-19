@@ -14,6 +14,16 @@ if config.config_file_name is not None:
 
 config.set_main_option("sqlalchemy.url", get_settings().resolved_database_url)
 target_metadata = Base.metadata
+UNMANAGED_TABLE_PREFIXES = ("checkpoint_", "checkpoints")
+
+
+def include_object(object_, name: str | None, type_: str, reflected: bool, compare_to) -> bool:
+    return not (
+        type_ == "table"
+        and reflected
+        and name is not None
+        and name.startswith(UNMANAGED_TABLE_PREFIXES)
+    )
 
 
 def run_migrations_offline() -> None:
@@ -23,6 +33,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -39,6 +50,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

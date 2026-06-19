@@ -46,6 +46,11 @@ class FakeJobRepository:
     def set_progress(self, job_id: str, progress: float) -> None:  # pragma: no cover
         raise NotImplementedError
 
+    def cancel(self, job_id: str) -> FakeJob:
+        assert job_id == self.job.id
+        self.job.status = "cancelled"
+        return self.job
+
 
 @dataclass
 class FakeBenchmarkRunner:
