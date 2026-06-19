@@ -1,0 +1,51 @@
+name: release-readiness
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv audit --locked
+      - run: uv run deptry .
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src tests
+      - run: uv run python scripts/check_docs.py
+      - run: uv run python scripts/export_openapi.py --check
+      - run: uv run pytest --cov=contextgate --cov-report=term-missing --cov-report=json --junitxml=.contextgate/junit.xml
+        env:
+          CONTEXTGATE_ENV_FILE: ""
+      - run: uv run python scripts/check_coverage.py coverage.json
+      - run: docker compose --env-file .env.example config --quiet
+      - run: docker build -t contextgate:release .
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: contextgate:release
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+      - uses: anchore/sbom-action@v0
+        with:
+          image: contextgate:release
+          artifact-name: contextgate-sbom.spdx.json
+      - name: Generate release evidence
+        run: |
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' contextgate:release)
+          uv run python scripts/release_report.py --image-digest "$IMAGE_ID" \
+            --junit-xml .contextgate/junit.xml --coverage-json coverage.json \
+            --dependency-audit passed --container-scan passed \
+            --sbom contextgate-sbom.spdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contextgate-release-readiness
+          path: reports/release-report.json

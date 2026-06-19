@@ -19,19 +19,65 @@ jobs:
       - run: uv run deptry . --github-output
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy src/contextgate
+      - run: uv run mypy src tests
+      - run: uv run python scripts/check_docs.py
+      - run: uv run python scripts/export_openapi.py --check
       - run: uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini upgrade head
         env:
           CONTEXTGATE_DATABASE_URL: sqlite:///./.contextgate/migration-test.db
       - run: uv run alembic -c src/contextgate/adapters/sqlalchemy/alembic.ini check
         env:
           CONTEXTGATE_DATABASE_URL: sqlite:///./.contextgate/migration-test.db
-      - run: uv run pytest --cov=contextgate --cov-report=term-missing
+      - run: uv run pytest --cov=contextgate --cov-report=term-missing --cov-report=json --junitxml=.contextgate/junit.xml
         env:
           CONTEXTGATE_EMBEDDING_BACKEND: deterministic
           CONTEXTGATE_DENSE_DIMENSION: "64"
           CONTEXTGATE_LATE_DIMENSION: "32"
           CONTEXTGATE_QDRANT_LOCAL_PATH: ./.contextgate/test-qdrant
-      - run: cp .env.example .env
-      - run: docker compose config --quiet
+      - run: docker compose --env-file .env.example config --quiet
       - run: docker build -t contextgate:test .
+      - name: Compose end-to-end smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CONTEXTGATE_IMAGE=contextgate:test
+          export CONTEXTGATE_EMBEDDING_BACKEND=deterministic
+          export CONTEXTGATE_DENSE_DIMENSION=64
+          export CONTEXTGATE_LATE_DIMENSION=32
+          export CONTEXTGATE_RATE_LIMIT_ENABLED=false
+          COMPOSE="docker compose -p contextgate-ci --env-file .env.example --profile demo --profile evaluation"
+          trap '$COMPOSE down -v' EXIT
+          $COMPOSE up -d
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/ready >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              $COMPOSE ps
+              $COMPOSE logs api worker demo-init
+              exit 1
+            fi
+            sleep 2
+          done
+          $COMPOSE wait demo-init
+          python scripts/e2e_smoke.py --evaluate
+          $COMPOSE restart api worker
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:8000/ready >/dev/null && break
+            sleep 2
+          done
+          python scripts/e2e_smoke.py
+          python scripts/load_smoke.py --requests 100 --concurrency 100 \
+            --max-p95-ms 3000 --max-p99-ms 4000
+          python scripts/load_smoke.py --requests 500 --concurrency 100 --target-rps 50 \
+            --output .contextgate/load-paced.json
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' contextgate:test)
+          uv run python scripts/release_report.py --image-digest "$IMAGE_ID" \
+            --junit-xml .contextgate/junit.xml --coverage-json coverage.json \
+            --load-json .contextgate/load-paced.json --dependency-audit passed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contextgate-release-evidence
+          path: |
+            coverage.json
+            reports/release-report.json
